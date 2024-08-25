@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+
+  ecoflow_exporter:
+    build: ./../
+    image: ecoflow_exporter
+    container_name: ecoflow_exporter
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    environment:
+      "LOG_LEVEL": 'DEBUG'
+      "ECOFLOW_DEVICE_SN": '$ECOFLOW_DEVICE_SN'
+      "ECOFLOW_ACCESS_KEY": '$ECOFLOW_ACCESS_KEY'
+      "ECOFLOW_SECRET_KEY": '$ECOFLOW_SECRET_KEY'
