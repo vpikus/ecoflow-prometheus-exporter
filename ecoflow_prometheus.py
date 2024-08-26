@@ -4,11 +4,13 @@ import hmac
 import logging as log
 import os
 import random
+import re
 import signal
 import sys
 import time
 import urllib.parse
 from datetime import timezone
+from typing import Dict, Iterable, Type, Union
 
 import inflection
 import requests
@@ -79,14 +81,69 @@ class EcoflowClient:
         return self._execute_request("GET", GET_ALL_QUOTA_URL, {"sn": device_sn})
 
 
+class EcoflowMetric:
+
+    METRICS_POOL: Dict[str, Union[Info, Gauge]] = {}
+
+    def __init__(
+        self,
+        type: Type[Union[Info, Gauge]],
+        name: str,
+        description: str,
+        labelnames: Iterable[str] = (),
+        **labels,
+    ):
+        name, index_labels = self.extract_indexes(name)
+        self.labels = {**labels, **index_labels}
+
+        if name in self.METRICS_POOL:
+            self.metric = self.METRICS_POOL[name]
+        else:
+            modified_labelnames = list(labelnames) + list(index_labels.keys())
+            self.metric = type(
+                f"{METRICTS_PREFIX}_{self.snake_case(name)}", description, labelnames=modified_labelnames
+            )
+            self.METRICS_POOL[name] = self.metric
+
+    def snake_case(self, string):
+        result = re.sub(r"[.\[\]]", "_", string)  # Replace dots and brackets with underscores
+        result = re.sub(r"_+", "_", result)  # Remove multiple underscores
+        return inflection.underscore(result.strip("_"))
+
+    def extract_indexes(self, name: str) -> tuple[str, Dict[str, str]]:
+        # Regular expression to find patterns like [0], [1], etc.
+        pattern = re.compile(r"\[(\d+)\]")
+        labels = {}
+        # Find all matches and replace them in the name
+        matches = pattern.findall(name)
+        for i, match in enumerate(matches):
+            labels[f"index_{i}"] = match
+        # Remove the array indices from the name
+        name = pattern.sub("", name)
+        return name, labels
+
+    def set(self, value: Union[int, float]):
+        self.metric.labels(**self.labels).set(value)
+
+    def info(self, data: Dict[str, str]):
+        self.metric.labels(**self.labels).info(data)
+
+    def clear(self):
+        self.metric.clear()
+
+
 class Worker:
 
     def __init__(self, client: EcoflowClient, device_sn):
         self.client = client
         self.device_sn = device_sn
-        self.online = Gauge(f"{METRICTS_PREFIX}_online", "1 if device is online", labelnames=["device"])
-        self.info = Info(f"{METRICTS_PREFIX}_info", "Device information", labelnames=["device"])
-        self.metrics = {}
+        self.online: EcoflowMetric = EcoflowMetric(
+            Gauge, "online", "1 if device is online", labelnames=["device"], device=device_sn
+        )
+        self.info: EcoflowMetric = EcoflowMetric(
+            Info, "info", "Device information", labelnames=["device"], device=device_sn
+        )
+        self.metrics: Dict[str, EcoflowMetric] = {}
 
     def run(self):
         while True:
@@ -97,6 +154,9 @@ class Worker:
             except EcoflowClientException as e:
                 log.error(f"Error: {e}")
                 log.error("Retrying in %s seconds", RETRY_TIMEOUT)
+                self.reset_metrics()
+                self.online.clear()
+                self.info.clear()
                 time.sleep(RETRY_TIMEOUT)
 
     def collect_data(self):
@@ -114,32 +174,30 @@ class Worker:
         self.update_metrics(statistics)
 
     def update_divice_status(self, device):
-        self.online.labels(device=device_sn).set(device["online"])
+        self.online.set(device["online"])
         info_data = dict(device)
         info_data.pop("online")
-        self.info.labels(device=device_sn).info(info_data)
+        self.info.info(info_data)
 
-    def update_metrics(self, statistics):
+    def update_metrics(self, statistics: Dict):
         for key, value in statistics.items():
             self.update_metric(key, value)
 
     def update_metric(self, key: str, value):
         if isinstance(value, (int, float)):
             if key not in self.metrics:
-                metric_name = self.snake_case(key)
-                self.metrics[key] = Gauge(f"{METRICTS_PREFIX}_{metric_name}", key, labelnames=["device"])
-            self.metrics[key].labels(device=device_sn).set(value)
+                self.metrics[key] = EcoflowMetric(
+                    Gauge, key, f"Device metric {key}", labelnames=["device"], device=device_sn
+                )
+            self.metrics[key].set(value)
         elif isinstance(value, list):
             for i, sub_value in enumerate(value):
-                self.update_metric(f"{key}.{i}", sub_value)
+                self.update_metric(f"{key}[{i}]", sub_value)
         elif isinstance(value, dict):
             for sub_key, sub_value in value.items():
                 self.update_metric(f"{key}.{sub_key}", sub_value)
         else:
             log.info(f"Skipping metric '{key}' with value '{value}'")
-
-    def snake_case(self, string):
-        return inflection.underscore(string.replace(".", "_"))
 
     def reset_metrics(self):
         for metric in self.metrics.values():
