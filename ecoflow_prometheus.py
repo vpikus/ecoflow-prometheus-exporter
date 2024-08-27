@@ -1,4 +1,3 @@
-import datetime
 import hashlib
 import hmac
 import logging as log
@@ -9,12 +8,11 @@ import signal
 import sys
 import time
 import urllib.parse
-from datetime import timezone
 from typing import Dict, Iterable, Type, Union
 
 import inflection
 import requests
-from prometheus_client import REGISTRY, Gauge, Info, start_http_server
+from prometheus_client import REGISTRY, Counter, Gauge, Info, start_http_server
 
 HOST = "https://api.ecoflow.com"
 DEVICE_LIST_UTL = HOST + "/iot-open/sign/device/list"
@@ -22,8 +20,8 @@ GET_ALL_QUOTA_URL = HOST + "/iot-open/sign/device/quota/all"
 
 EXPORTER_PORT = int(os.getenv("EXPORTER_PORT", "9090"))
 COLLECTING_INTERVAL = int(os.getenv("COLLECTING_INTERVAL", "10"))
-RETRY_TIMEOUT = int(os.getenv("RETRY_TIMEOUT", "60"))
-ESTABLISH_ATTEMPTS = int(os.getenv("ESTABLISH_ATTEMPTS", "3"))
+RETRY_TIMEOUT = int(os.getenv("RETRY_TIMEOUT", "30"))
+ESTABLISH_ATTEMPTS = int(os.getenv("ESTABLISH_ATTEMPTS", "5"))
 
 METRICTS_PREFIX = os.getenv("METRICTS_PREFIX", "ecoflow")
 
@@ -130,6 +128,9 @@ class EcoflowMetric:
     def info(self, data: Dict[str, str]):
         self.metric.labels(**self.labels).info(data)
 
+    def inc(self, value: Union[int, float] = 1):
+        self.metric.labels(**self.labels).inc(value)
+
     def clear(self):
         self.metric.clear()
 
@@ -146,6 +147,13 @@ class Worker:
             Gauge, "online", "1 if device is online", labelnames=EcoflowMetric.LABEL_NAMES, **self.labels
         )
         self.metrics: Dict[str, EcoflowMetric] = {}
+        self.connection_errors: EcoflowMetric = EcoflowMetric(
+            Counter,
+            "connection_errors",
+            "Connection errors count to Ecoflow IOT API",
+            labelnames=EcoflowMetric.LABEL_NAMES,
+            **self.labels,
+        )
 
     def run(self):
         while True:
@@ -156,8 +164,7 @@ class Worker:
             except EcoflowClientException as e:
                 log.error(f"Error: {e}")
                 log.error("Retrying in %s seconds", RETRY_TIMEOUT)
-                self.reset_metrics()
-                self.online.clear()
+                self.connection_errors.inc()
                 time.sleep(RETRY_TIMEOUT)
 
     def collect_data(self):
