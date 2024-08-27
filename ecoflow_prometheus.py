@@ -54,8 +54,8 @@ class EcoflowClient:
         sign_params.update(
             {
                 "accessKey": self.auth.accessKey,
-                "nonce": f"{random.randint(0,999999):06d}",
-                "timestamp": f"{int(datetime.datetime.now(timezone.utc).timestamp() * 1000)}",
+                "nonce": f"{str(random.randint(100000, 999999))}",
+                "timestamp": f"{str(int(time.time() * 1000))}",
             }
         )
 
@@ -84,6 +84,8 @@ class EcoflowClient:
 class EcoflowMetric:
 
     METRICS_POOL: Dict[str, Union[Info, Gauge]] = {}
+
+    LABEL_NAMES = ["device", "device_name", "product_name"]
 
     def __init__(
         self,
@@ -134,14 +136,14 @@ class EcoflowMetric:
 
 class Worker:
 
-    def __init__(self, client: EcoflowClient, device_sn):
+    def __init__(self, client: EcoflowClient, device_sn: str, device_name: str, product_name: str):
         self.client = client
         self.device_sn = device_sn
+        self.device_name = device_name
+        self.product_name = product_name
+        self.labels = {"device": device_sn, "device_name": device_name, "product_name": product_name}
         self.online: EcoflowMetric = EcoflowMetric(
-            Gauge, "online", "1 if device is online", labelnames=["device"], device=device_sn
-        )
-        self.info: EcoflowMetric = EcoflowMetric(
-            Info, "info", "Device information", labelnames=["device"], device=device_sn
+            Gauge, "online", "1 if device is online", labelnames=EcoflowMetric.LABEL_NAMES, **self.labels
         )
         self.metrics: Dict[str, EcoflowMetric] = {}
 
@@ -156,7 +158,6 @@ class Worker:
                 log.error("Retrying in %s seconds", RETRY_TIMEOUT)
                 self.reset_metrics()
                 self.online.clear()
-                self.info.clear()
                 time.sleep(RETRY_TIMEOUT)
 
     def collect_data(self):
@@ -175,9 +176,6 @@ class Worker:
 
     def update_divice_status(self, device):
         self.online.set(device["online"])
-        info_data = dict(device)
-        info_data.pop("online")
-        self.info.info(info_data)
 
     def update_metrics(self, statistics: Dict):
         for key, value in statistics.items():
@@ -187,7 +185,7 @@ class Worker:
         if isinstance(value, (int, float)):
             if key not in self.metrics:
                 self.metrics[key] = EcoflowMetric(
-                    Gauge, key, f"Device metric {key}", labelnames=["device"], device=device_sn
+                    Gauge, key, f"Device metric {key}", labelnames=EcoflowMetric.LABEL_NAMES, **self.labels
                 )
             self.metrics[key].set(value)
         elif isinstance(value, list):
@@ -271,7 +269,12 @@ if __name__ == "__main__":
         log.error(f"Device with SN {device_sn} not found")
         sys.exit(1)
 
-    worker = Worker(client, device_sn)
+    worker = Worker(
+        client,
+        device_sn,
+        filtered_device.get("deviceName", os.getenv("ECOFLOW_DEVICE_NAME")),
+        filtered_device.get("productName"),
+    )
 
     start_http_server(EXPORTER_PORT)
 
