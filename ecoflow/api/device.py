@@ -1,0 +1,268 @@
+"""Device API client using private MQTT protocol.
+
+This client uses the private EcoFlow MQTT API which allows actively requesting
+device data via a get/reply topic pattern. It works with all EcoFlow devices,
+including those not supported by the public REST or MQTT APIs.
+
+Authentication: Email/password (same as MQTT API)
+Data flow: Request/reply pattern - actively requests quota data
+Topics:
+  - /app/device/property/{device_sn} - receives push data
+  - /app/{user_id}/{device_sn}/thing/property/get - sends quota requests
+  - /app/{user_id}/{device_sn}/thing/property/get_reply - receives quota responses
+"""
+
+import json
+import logging as log
+import os
+import random
+import ssl
+import time
+from threading import Lock
+from typing import Any
+
+import paho.mqtt.client as mqtt
+
+from .base import EcoflowApiClient
+from .models import DeviceInfo, EcoflowApiException
+from .mqtt import MqttAuthentication, RepeatTimer
+
+MQTT_TIMEOUT = int(os.getenv("MQTT_TIMEOUT", "60"))
+QUOTA_REQUEST_INTERVAL = int(os.getenv("QUOTA_REQUEST_INTERVAL", "30"))
+
+
+def _gen_request_id() -> int:
+    """Generate random request ID for MQTT messages."""
+    return 999900000 + random.randint(10000, 99999)
+
+
+class DeviceApiClient(EcoflowApiClient):
+    """Device API client using private MQTT protocol.
+
+    Unlike the public MQTT API which only receives push data, the Device API
+    can actively request quota data from devices using a request/reply pattern.
+    This provides more reliable data collection and works with all EcoFlow devices.
+    """
+
+    def __init__(self, username: str, password: str, device_sn: str):
+        self.device_sn = device_sn
+        self.auth = MqttAuthentication(username, password)
+
+        self._quota_cache: dict[str, Any] = {}
+        self._cache_lock = Lock()
+        self._last_update: float | None = None
+        self._client: mqtt.Client | None = None
+        self._connected = False
+        self._idle_timer: RepeatTimer | None = None
+        self._quota_timer: RepeatTimer | None = None
+        self._last_message_time: float | None = None
+
+        # Topics
+        self._data_topic: str = ""
+        self._get_topic: str = ""
+        self._get_reply_topic: str = ""
+
+    def connect(self) -> None:
+        """Authenticate and connect to MQTT broker."""
+        self.auth.authorize()
+
+        # Set up topics using user_id
+        user_id = self.auth.user_id
+        self._data_topic = f"/app/device/property/{self.device_sn}"
+        self._get_topic = f"/app/{user_id}/{self.device_sn}/thing/property/get"
+        self._get_reply_topic = f"/app/{user_id}/{self.device_sn}/thing/property/get_reply"
+
+        self._connect_mqtt()
+
+        # Wait for initial connection
+        timeout = 10
+        start = time.time()
+        while not self._connected and time.time() - start < timeout:
+            time.sleep(0.1)
+
+        if not self._connected:
+            raise EcoflowApiException("Failed to connect to MQTT broker")
+
+        # Start idle reconnection timer
+        self._idle_timer = RepeatTimer(10, self._check_idle)
+        self._idle_timer.daemon = True
+        self._idle_timer.start()
+
+        # Start quota request timer
+        self._quota_timer = RepeatTimer(QUOTA_REQUEST_INTERVAL, self._request_quota)
+        self._quota_timer.daemon = True
+        self._quota_timer.start()
+
+        # Request initial quota
+        time.sleep(1)  # Wait for subscription to be established
+        self._request_quota()
+
+        log.info("Connected to EcoFlow Device API (private MQTT)")
+
+    def get_devices(self) -> list[DeviceInfo]:
+        """Get list of devices (returns configured device only)."""
+        return [self._get_device_info()]
+
+    def get_device(self, device_sn: str) -> DeviceInfo | None:
+        """Get device info by serial number."""
+        if device_sn == self.device_sn:
+            return self._get_device_info()
+        return None
+
+    def get_device_quota(self, device_sn: str) -> dict[str, Any]:
+        """Get cached device metrics."""
+        if device_sn != self.device_sn:
+            return {}
+
+        with self._cache_lock:
+            return dict(self._quota_cache)
+
+    def _get_device_info(self) -> DeviceInfo:
+        """Build DeviceInfo from available data."""
+        online = self._connected
+        if self._last_update:
+            age = time.time() - self._last_update
+            online = online and age < MQTT_TIMEOUT
+
+        return DeviceInfo(
+            sn=self.device_sn,
+            name=os.getenv("ECOFLOW_DEVICE_NAME", self.device_sn),
+            product_name="Unknown",
+            online=online,
+        )
+
+    def _connect_mqtt(self) -> None:
+        """Establish MQTT connection."""
+        if self._client:
+            self._client.loop_stop()
+            self._client.disconnect()
+
+        client_id = self.auth.mqtt_client_id
+        self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id)
+        self._client.username_pw_set(self.auth.mqtt_username, self.auth.mqtt_password)
+        self._client.tls_set(certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED)
+        self._client.tls_insecure_set(False)
+        self._client.on_connect = self._on_connect
+        self._client.on_disconnect = self._on_disconnect
+        self._client.on_message = self._on_message
+
+        log.info(
+            "Connecting to MQTT broker %s:%d (Device API)",
+            self.auth.mqtt_url,
+            self.auth.mqtt_port,
+        )
+        self._client.connect(self.auth.mqtt_url, self.auth.mqtt_port)
+        self._client.loop_start()
+
+    def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
+        """Handle MQTT connection callback."""
+        self._last_message_time = time.time()
+
+        if str(reason_code) == "Success":
+            self._connected = True
+            # Subscribe to both data topic and get_reply topic
+            topics = [
+                (self._data_topic, 1),
+                (self._get_reply_topic, 1),
+            ]
+            self._client.subscribe(topics)
+            log.info("Subscribed to Device API topics: %s", [t[0] for t in topics])
+        else:
+            self._connected = False
+            log.error("MQTT connection failed: %s", reason_code)
+
+    def _on_disconnect(self, client, userdata, flags, reason_code, properties) -> None:
+        """Handle MQTT disconnection callback."""
+        self._connected = False
+        if reason_code != 0:
+            log.error("Unexpected MQTT disconnection: %s", reason_code)
+
+    def _on_message(self, client, userdata, message) -> None:
+        """Handle incoming MQTT message."""
+        self._last_message_time = time.time()
+
+        try:
+            payload = message.payload.decode("utf-8")
+            topic = message.topic
+
+            if topic == self._get_reply_topic:
+                self._handle_quota_reply(payload)
+            elif topic == self._data_topic:
+                self._handle_data_message(payload)
+            else:
+                log.debug("Message on unknown topic: %s", topic)
+
+        except UnicodeDecodeError:
+            log.warning("Failed to decode MQTT message")
+        except Exception as e:
+            log.error("Error processing MQTT message: %s", e)
+
+    def _handle_quota_reply(self, payload: str) -> None:
+        """Process quota reply message (latestQuotas response)."""
+        try:
+            data = json.loads(payload)
+
+            if data.get("operateType") == "latestQuotas":
+                message_data = data.get("data", {})
+                online = int(message_data.get("online", 0))
+
+                if online == 1:
+                    quota_map = message_data.get("quotaMap", {})
+                    with self._cache_lock:
+                        self._quota_cache.update(quota_map)
+                        self._last_update = time.time()
+                    log.debug("Received quota data with %d parameters", len(quota_map))
+                else:
+                    log.info("Device is offline (from quota reply)")
+            else:
+                log.debug("Quota reply with operateType: %s", data.get("operateType"))
+
+        except json.JSONDecodeError as e:
+            log.error("Failed to parse quota reply: %s", e)
+
+    def _handle_data_message(self, payload: str) -> None:
+        """Process push data message (same as public MQTT)."""
+        try:
+            data = json.loads(payload)
+            params = data.get("params", {})
+
+            with self._cache_lock:
+                self._quota_cache.update(params)
+                self._last_update = time.time()
+
+            log.debug("Received push data with %d parameters", len(params))
+
+        except json.JSONDecodeError as e:
+            log.error("Failed to parse data message: %s", e)
+
+    def _request_quota(self) -> None:
+        """Send quota request to device."""
+        if not self._connected or not self._client:
+            log.debug("Not connected, skipping quota request")
+            return
+
+        message = {
+            "from": "PrometheusExporter",
+            "id": str(_gen_request_id()),
+            "version": "1.0",
+            "moduleType": 0,
+            "operateType": "latestQuotas",
+            "params": {},
+        }
+
+        try:
+            payload = json.dumps(message)
+            self._client.publish(self._get_topic, payload, qos=1)
+            log.debug("Sent quota request to %s", self._get_topic)
+        except Exception as e:
+            log.error("Failed to send quota request: %s", e)
+
+    def _check_idle(self) -> None:
+        """Check for idle connection and reconnect if needed."""
+        if (
+            self._last_message_time
+            and time.time() - self._last_message_time > MQTT_TIMEOUT
+        ):
+            log.warning("No MQTT messages for %d seconds, reconnecting...", MQTT_TIMEOUT)
+            self._connect_mqtt()
+            self._last_message_time = time.time()

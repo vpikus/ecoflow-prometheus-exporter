@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Prometheus metrics exporter for EcoFlow devices. Supports two authentication methods:
+Prometheus metrics exporter for EcoFlow devices. Supports three API backends:
 - **REST API**: Developer tokens (access_key/secret_key) - polling-based
-- **MQTT**: User credentials (email/password) - push-based, real-time
+- **MQTT**: User credentials (email/password) - push-based, passive
+- **Device API**: User credentials (email/password) - request/reply, active (works with all devices)
 
 ## Commands
 
@@ -20,10 +21,18 @@ export ECOFLOW_ACCESS_KEY="your-access-key"
 export ECOFLOW_SECRET_KEY="your-secret-key"
 python ecoflow_prometheus.py
 
-# Run with MQTT (user credentials)
+# Run with MQTT (user credentials, passive)
 export ECOFLOW_DEVICE_SN="your-device-sn"
 export ECOFLOW_ACCOUNT_USER="your-email"
 export ECOFLOW_ACCOUNT_PASSWORD="your-password"
+export ECOFLOW_API_TYPE="mqtt"  # optional, default
+python ecoflow_prometheus.py
+
+# Run with Device API (user credentials, active - recommended)
+export ECOFLOW_DEVICE_SN="your-device-sn"
+export ECOFLOW_ACCOUNT_USER="your-email"
+export ECOFLOW_ACCOUNT_PASSWORD="your-password"
+export ECOFLOW_API_TYPE="device"
 python ecoflow_prometheus.py
 
 # Docker
@@ -42,7 +51,8 @@ ecoflow-prometheus-exporter/
     │   ├── base.py            # EcoflowApiClient (ABC)
     │   ├── models.py          # DeviceInfo, EcoflowApiException
     │   ├── rest.py            # RestApiClient (polling)
-    │   └── mqtt.py            # MqttApiClient (push-based)
+    │   ├── mqtt.py            # MqttApiClient (push-based)
+    │   └── device.py          # DeviceApiClient (request/reply)
     ├── metrics/
     │   └── prometheus.py      # EcoflowMetric wrapper
     └── worker.py              # Worker (collection loop)
@@ -61,19 +71,25 @@ ecoflow-prometheus-exporter/
    - Polling-based: fetches data on each `get_device_quota()` call
    - Endpoints: `api.ecoflow.com/iot-open/sign/device/...`
 
-3. **MqttApiClient** (`ecoflow/api/mqtt.py`): MQTT implementation
+3. **MqttApiClient** (`ecoflow/api/mqtt.py`): Public MQTT implementation
    - Authenticates with email/password via REST, then connects to MQTT
    - Push-based: caches metrics as they arrive via MQTT
    - Broker: `mqtt.ecoflow.com:8883` (TLS)
    - Topic: `/app/device/property/{DEVICE_SN}`
 
-4. **Worker** (`ecoflow/worker.py`): Polling loop that collects metrics
-   - Depends on abstract `EcoflowApiClient`
-   - Dynamically creates Prometheus metrics from device data
+4. **DeviceApiClient** (`ecoflow/api/device.py`): Private MQTT implementation
+   - Same auth as MQTT, but uses request/reply pattern
+   - Actively requests quota data (works with all EcoFlow devices)
+   - Topics:
+     - `/app/device/property/{device_sn}` - receives push data
+     - `/app/{user_id}/{device_sn}/thing/property/get` - sends requests
+     - `/app/{user_id}/{device_sn}/thing/property/get_reply` - receives responses
+   - Sends `latestQuotas` request every QUOTA_REQUEST_INTERVAL seconds
 
 5. **create_client()** (`ecoflow/api/__init__.py`): Factory function
    - Detects credentials from environment variables
-   - Raises `CredentialsConflictError` if both REST and MQTT credentials provided
+   - Uses ECOFLOW_API_TYPE to choose between MQTT and Device API
+   - Raises `CredentialsConflictError` if both REST and user credentials provided
 
 ## Environment Variables
 
@@ -82,26 +98,30 @@ ecoflow-prometheus-exporter/
 | ECOFLOW_DEVICE_SN | - | Device serial number (required) |
 | ECOFLOW_ACCESS_KEY | - | REST API access key |
 | ECOFLOW_SECRET_KEY | - | REST API secret key |
-| ECOFLOW_ACCOUNT_USER | - | MQTT: EcoFlow account email |
-| ECOFLOW_ACCOUNT_PASSWORD | - | MQTT: EcoFlow account password |
+| ECOFLOW_ACCOUNT_USER | - | MQTT/Device: EcoFlow account email |
+| ECOFLOW_ACCOUNT_PASSWORD | - | MQTT/Device: EcoFlow account password |
+| ECOFLOW_API_TYPE | mqtt | API type for user credentials: "mqtt" or "device" |
 | ECOFLOW_DEVICE_NAME | - | Override device name in metrics |
-| ECOFLOW_API_HOST | api.ecoflow.com | API host (both REST and MQTT auth) |
+| ECOFLOW_API_HOST | api.ecoflow.com | API host for authentication |
 | EXPORTER_PORT | 9090 | Prometheus metrics port |
-| COLLECTING_INTERVAL | 10 | Seconds between collections |
+| COLLECTING_INTERVAL | 10 | Seconds between Worker collections |
+| QUOTA_REQUEST_INTERVAL | 30 | Device API: seconds between quota requests |
 | RETRY_TIMEOUT | 30 | Retry delay on errors |
 | ESTABLISH_ATTEMPTS | 5 | Max connection attempts |
 | MQTT_TIMEOUT | 60 | MQTT idle timeout before reconnect |
 | METRICS_PREFIX | ecoflow | Metric name prefix |
 | LOG_LEVEL | INFO | DEBUG/INFO/WARNING/ERROR |
 
-**Note**: Provide either REST credentials (ACCESS_KEY + SECRET_KEY) or MQTT credentials (ACCOUNT_USER + ACCOUNT_PASSWORD), not both.
+## API Comparison
 
-## MQTT vs REST Comparison
+| Feature | REST API | MQTT | Device API |
+|---------|----------|------|------------|
+| Auth | Developer tokens | User email/password | User email/password |
+| Data flow | Polling | Push (passive) | Request/reply (active) |
+| Device discovery | Yes | No | No |
+| Device support | Limited | Limited | All devices |
+| Latency | Poll interval | Instant | Request interval |
+| Rate limits | API limits | None | None |
+| Reliability | High | Depends on push | High (active requests) |
 
-| Feature | REST API | MQTT |
-|---------|----------|------|
-| Auth | Developer tokens | User email/password |
-| Data flow | Polling | Push (real-time) |
-| Device discovery | Yes | No (configured device only) |
-| Latency | Higher (poll interval) | Lower (instant updates) |
-| Rate limits | API rate limits apply | No rate limits |
+**Recommendation**: Use Device API (`ECOFLOW_API_TYPE=device`) for best compatibility with all EcoFlow devices.
