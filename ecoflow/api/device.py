@@ -42,9 +42,20 @@ class DeviceApiClient(EcoflowApiClient):
     Unlike the public MQTT API which only receives push data, the Device API
     can actively request quota data from devices using a request/reply pattern.
     This provides more reliable data collection and works with all EcoFlow devices.
+    Supports both JSON and protobuf message formats.
+
+    Args:
+        username: EcoFlow account email.
+        password: EcoFlow account password.
+        device_sn: Device serial number.
     """
 
-    def __init__(self, username: str, password: str, device_sn: str):
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        device_sn: str,
+    ):
         self.device_sn = device_sn
         self.auth = MqttAuthentication(username, password)
 
@@ -56,6 +67,11 @@ class DeviceApiClient(EcoflowApiClient):
         self._idle_timer: RepeatTimer | None = None
         self._quota_timer: RepeatTimer | None = None
         self._last_message_time: float | None = None
+
+        # Initialize generic protobuf decoder for all devices
+        from ..proto.decoder import get_decoder
+        self._proto_decoder = get_decoder()
+        log.info("Protobuf decoder enabled")
 
         # Topics
         self._data_topic: str = ""
@@ -193,9 +209,24 @@ class DeviceApiClient(EcoflowApiClient):
                 log.debug("Message on unknown topic: %s", topic)
 
         except UnicodeDecodeError:
-            log.warning("Failed to decode MQTT message")
+            # Binary payload (protobuf)
+            self._handle_binary_message(message.payload)
         except Exception as e:
             log.error("Error processing MQTT message: %s", e)
+
+    def _handle_binary_message(self, payload: bytes) -> None:
+        """Process incoming binary (protobuf) MQTT message."""
+        try:
+            params = self._proto_decoder.decode(payload)
+
+            if params:
+                with self._cache_lock:
+                    self._quota_cache.update(params)
+                    self._last_update = time.time()
+
+                log.debug("Updated cache with %d protobuf parameters", len(params))
+        except Exception as e:
+            log.error("Error processing protobuf message: %s", e)
 
     def _handle_quota_reply(self, payload: str) -> None:
         """Process quota reply message (latestQuotas response)."""

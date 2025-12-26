@@ -1,0 +1,1697 @@
+// EcoFlow Device Common Protocol
+
+syntax = "proto3";
+
+// USB Real Display Info - Contains power, voltage, current readings for USB ports
+message UsbRealDisplayInfo {
+    float usb_pow = 1;  // Power in Watts (negative = output)
+    float usb_vol = 2;  // Voltage in Volts
+    float usb_amp = 3;  // Current in Amps
+}
+
+// Pogopin Access Info
+message PogopinAccessInfo {
+    uint32 access_dev_type = 1;
+    uint32 access_state = 2;
+}
+
+// Error Record Item
+message ErrcodeRecordItem {
+    uint32 errcode = 1;
+    uint32 errcode_timestamp = 2;
+}
+
+// Error Record List
+message ErrcodeRecordList {
+    repeated ErrcodeRecordItem list_info = 1;
+}
+
+// Device Error Code List
+message DevErrcodeList {
+    repeated uint32 dev_errcode = 1;
+}
+
+// Device Module Error Code Item
+message DevModuleErrcodeItem {
+    uint32 module_addr = 1;
+    uint32 module_d_addr = 2;
+    uint32 module_errcode = 3;
+    bool comm_online = 4;
+}
+
+// Device Module Error Code List
+message DevModuleErrcodeList {
+    repeated DevModuleErrcodeItem dev_module_errcode_list = 1;
+}
+
+// Device Accessory Error Code Item
+message DevAccessoryErrcodeItem {
+    string dev_accessory_sn = 1;
+    repeated uint32 dev_accessory_errcode = 2;
+}
+
+// Device Accessory Error Code List
+message DevAccessoryErrcodeList {
+    repeated DevAccessoryErrcodeItem dev_accessory_errcode_list = 1;
+}
+
+// Time Task Item V2
+message TimeTaskItemV2 {
+    uint32 task_index = 1;
+    bool is_cfg = 2;
+    bool is_enable = 3;
+    uint32 conflict_flag = 4;
+    uint32 time_mode = 5;
+    uint32 time_param = 6;
+    uint32 time_table = 7;
+    uint32 task_type = 8;
+    uint32 task_param = 9;
+    bytes task_param_detail = 10;
+}
+
+// PV DC Charge Setting
+message PvDcChgSetting {
+    uint32 pv_plug_index = 1;
+    uint32 pv_chg_vol_spec = 2;
+    uint32 pv_chg_amp_limit = 3;
+}
+
+// PV DC Charge Setting List
+message PvDcChgSettingList {
+    repeated PvDcChgSetting list_info = 1;
+}
+
+// BP Group Info
+message BpGroupInfo {
+    uint32 group_num = 1;
+    uint32 bp_num = 2;
+    uint32 bp_chg_dsg_state = 3;
+    uint32 bp_soc = 4;
+    uint32 bp_energy = 5;
+    uint32 bp_full_energy = 6;
+    uint32 bp_heat_time = 7;
+    int32 bp_temp = 8;
+    uint32 bp_errcode = 9;
+    uint32 bp_otp = 10;
+    uint32 bp_utp = 11;
+}
+
+// BP Group List
+message BpGroupList {
+    repeated BpGroupInfo group_item = 1;
+}
+
+// Access Device Info
+message AccessDevInfo {
+    uint32 dev_type = 1;
+    uint32 state = 2;
+    uint32 chanel_num = 3;
+    uint32 cfg_chanel_num = 4;
+}
+
+// Cloud Meter
+message CloudMeter {
+    bool has_meter = 1;
+    uint32 model = 2;
+    string sn = 3;
+    float phase_a_power = 4;
+    float phase_b_power = 5;
+    float phase_c_power = 6;
+}
+
+// Load Channel Status
+message LoadChSta {
+    uint32 load_sta = 1;
+    uint32 splitphase = 2;
+    uint32 set_amp = 3;
+    uint32 icon_num = 4;
+    string ch_name = 5;
+    uint32 ctrl_mode = 6;
+    uint32 ctrl_prio = 7;
+    uint32 load_ch_switch_cause = 8;
+}
+
+// Load Channel Sample Info
+message LoadChSampleInfo {
+    float load_ch_vol = 1;
+    float load_ch_power = 2;
+    float load_ch_curr = 3;
+}
+
+// Power Outage Item
+message PowerOutageItem {
+    bool power_outage_port_enable = 1;
+    uint32 power_outage_port_type = 2;
+    uint32 power_outage_min_soc = 3;
+}
+
+// Power Outages List
+message PowerOutagesList {
+    repeated PowerOutageItem power_outage_item = 1;
+}
+
+// Timezone Change Item
+message TimezoneChangeItem {
+    uint32 utc_time = 1;
+    int32 utc_timezone = 2;
+}
+
+// Timezone Change List
+message TimezoneChangeList {
+    repeated TimezoneChangeItem time_zone_change_item = 1;
+}
+
+// Do Not Disturb Mode
+message DoNotDisturbMode {
+    bool is_enable = 1;
+    uint32 type = 2;
+    uint32 time_table = 3;
+    bool is_active = 4;
+}
+
+// Camping Lamp Mode
+message CampingLampMode {
+    uint32 mode_index = 1;
+    bool enable = 2;
+    uint32 light_brightness = 3;
+    uint32 color_temperature = 4;
+}
+
+// Camping Lamp Mode List
+message CampingLampModeList {
+    repeated CampingLampMode camping_lamp_mode = 1;
+}
+
+// Camping Lamp Mode Select
+message CampingLampModeSelect {
+    uint32 lamp_state = 1;
+    uint32 mode_index_select = 2;
+}
+
+// WiFi AP Mesh ID Info
+message WifiApMeshIdInfo {
+    repeated uint32 id_list = 1;
+}
+
+// CT Install Config Item
+message CTInstallConfigItem {
+    uint32 install_position = 1;
+    uint32 id = 2;
+}
+
+// CT Install Config List
+message CTInstallConfigList {
+    repeated CTInstallConfigItem item_list = 1;
+}
+
+// Panel CT Position List
+message PanelCTPositionList {
+    repeated uint32 ct_position_list = 1;
+}
+
+// Output Power Factor List
+message OutputPowerFactorList {
+    repeated float output_power_factor = 1;
+}
+
+// Day Resident Load
+message ResidentLoad {
+    uint32 start_min = 1;
+    uint32 end_min = 2;
+    float load_power = 3;
+}
+
+// Day Resident Load List
+message DayResidentLoadList {
+    repeated ResidentLoad load = 1;
+}
+
+// Display Property Upload - Main status message from the charger
+message DisplayPropertyUpload {
+    // Error Code
+    uint32 errcode = 1;
+
+    // System Status
+    uint32 sys_status = 2;
+
+    // Power Summary
+    float pow_in_sum_w = 3;   // Total input power in Watts
+    float pow_out_sum_w = 4;  // Total output power in Watts
+
+    // LCD Settings
+    uint32 lcd_light = 5;
+
+    // Energy Backup
+    uint32 energy_backup_state = 6;
+    uint32 energy_backup_en = 7;
+    uint32 energy_backup_start_soc = 8;
+
+    // USB Power Output (individual ports)
+    float pow_get_qcusb1 = 9;
+    float pow_get_qcusb2 = 10;
+    float pow_get_typec1 = 11;
+    float pow_get_typec2 = 12;
+
+    // Flow Info (charging direction flags)
+    uint32 flow_info_qcusb1 = 13;
+    uint32 flow_info_qcusb2 = 14;
+    uint32 flow_info_typec1 = 15;
+    uint32 flow_info_typec2 = 16;
+
+    // Device Standby/Sleep Settings
+    uint32 dev_standby_time = 17;
+    uint32 screen_off_time = 18;
+    uint32 ac_standby_time = 19;
+    uint32 dc_standby_time = 20;
+
+    // AC Always On Settings
+    bool ac_always_on_flag = 22;
+    uint32 ac_always_on_mini_soc = 23;
+
+    // XBoost Enable
+    bool xboost_en = 25;
+
+    // PCS Temperature
+    int32 temp_pcs_dc = 26;
+    int32 temp_pcs_ac = 27;
+    int32 temp_pv_h = 28;
+    int32 temp_pv_l = 29;
+
+    // PCS Fan Level
+    uint32 pcs_fan_level = 30;
+
+    // PV Input Info
+    uint32 flow_info_pv_h = 31;
+    uint32 flow_info_pv_l = 32;
+    uint32 flow_info_12v = 33;
+    uint32 flow_info_24v = 34;
+    float pow_get_pv_h = 35;
+    float pow_get_pv_l = 36;
+    float pow_get_12v = 37;
+    float pow_get_24v = 38;
+
+    // PV H/L Flags
+    uint32 plug_in_info_pv_h_flag = 39;
+    uint32 plug_in_info_pv_h_type = 40;
+    float plug_in_info_pv_h_vol = 41;
+    uint32 plug_in_info_pv_l_flag = 42;
+    uint32 plug_in_info_pv_l_type = 43;
+    float plug_in_info_pv_l_vol = 44;
+
+    // AC/DC Flow Info
+    uint32 flow_info_ac2dc = 45;
+    uint32 flow_info_dc2ac = 46;
+    uint32 flow_info_ac_in = 47;
+    uint32 flow_info_ac_hv_out = 48;
+    uint32 flow_info_ac_lv_out = 49;
+    uint32 flow_info_5p8_in = 50;
+    uint32 flow_info_5p8_out = 51;
+
+    // LLC Power
+    float pow_get_llc = 52;
+    float pow_get_ac = 53;
+    float pow_get_ac_in = 54;
+    float pow_get_ac_hv_out = 55;
+    float pow_get_ac_lv_out = 56;
+    float pow_get_ac_lv_tt30_out = 57;
+    float pow_get_5p8 = 58;
+
+    // AC Out Info
+    uint32 plug_in_info_ac_out_type = 59;
+    uint32 plug_in_info_ac_out_freq = 60;
+    uint32 plug_in_info_ac_in_flag = 61;
+    uint32 plug_in_info_ac_in_feq = 62;
+    uint32 plug_in_info_5p8_flag = 63;
+    uint32 plug_in_info_5p8_type = 64;
+    uint32 plug_in_info_5p8_detail = 65;
+    uint32 plug_in_info_5p8_freq = 66;
+    float plug_in_info_ac_out_vol = 67;
+    float plug_in_info_ac_in_vol = 68;
+    float plug_in_info_5p8_vol = 69;
+
+    // PV2 Power
+    float pow_get_pv2 = 70;
+    float plug_in_info_pv2_amp = 71;
+
+    // Button/Switch Status
+    bool btn_ac_out_lv_switch = 72;
+    bool btn_ac_out_hv_switch = 73;
+    bool dc_out_open = 74;
+
+    // Power Socket
+    uint32 power_socket = 75;
+
+    // USB Switch
+    bool btn_usb_switch = 76;
+
+    // DCP2 Power
+    float pow_get_dcp2 = 77;
+    uint32 flow_info_dcp2_in = 78;
+    uint32 flow_info_dcp2_out = 79;
+
+    // PV2 DC Settings
+    uint32 plug_in_info_pv2_dc_amp_max = 80;
+    uint32 plug_in_info_pv2_chg_amp_max = 81;
+    uint32 plug_in_info_pv2_chg_vol_max = 82;
+
+    // DCP2 Plug In Info
+    uint32 plug_in_info_dcp2_in_flag = 83;
+    uint32 plug_in_info_dcp2_dsg_chg_type = 84;
+    uint32 plug_in_info_dcp2_charger_flag = 85;
+    uint32 plug_in_info_dcp2_type = 86;
+    uint32 plug_in_info_dcp2_detail = 87;
+    string plug_in_info_dcp2_sn = 88;
+    uint32 plug_in_info_dcp2_run_state = 89;
+    string plug_in_info_dcp2_firm_ver = 90;
+    uint32 plug_in_info_dcp2_resv = 91;
+    float plug_in_info_dcp2_vol = 92;
+    float plug_in_info_dcp2_amp = 93;
+
+    // ACP Power
+    float pow_get_acp = 94;
+
+    // Temperature List
+    bytes temp_list = 95;
+
+    // Communication Message Description
+    bytes comm_msg_description = 96;
+
+    // TypeC3/C4 Power
+    float pow_get_typec3 = 100;
+    float pow_get_typec4 = 101;
+
+    // CMS Battery Temperature
+    int32 cms_batt_temp = 102;
+
+    // DC BIDI
+    float plug_in_info_dc_bidi_vol = 103;
+    float plug_in_info_dc_bidi_amp = 104;
+    float pow_get_dc_bidi = 105;
+    uint32 plug_in_info_dc_bidi_flag = 106;
+
+    // ACP Plug In Info
+    uint32 plug_in_info_acp_chg_pow_max = 107;
+    uint32 plug_in_info_acp_chg_hal_pow_max = 108;
+    uint32 plug_in_info_acp_dsg_pow_max = 109;
+    uint32 plug_in_info_acp_flag = 110;
+    uint32 plug_in_info_acp_dsg_chg = 111;
+    uint32 plug_in_info_acp_charger_flag = 112;
+    uint32 plug_in_info_acp_type = 113;
+    uint32 plug_in_info_acp_detail = 114;
+    string plug_in_info_acp_sn = 115;
+    uint32 plug_in_info_acp_run_state = 116;
+    uint32 plug_in_info_acp_err_code = 117;
+    string plug_in_info_acp_firm_ver = 118;
+    uint32 plug_in_info_acp_resv = 119;
+    float plug_in_info_acp_vol = 120;
+    float plug_in_info_acp_amp = 121;
+    float plug_in_info_acp_freq = 122;
+
+    // Generator Connection Device Error Code
+    uint32 generator_conn_dev_errcode = 123;
+    uint32 plug_in_info_ac_in_chg_mode = 124;
+
+    // PV DC Charge Setting List
+    PvDcChgSettingList pv_dc_chg_setting_list = 125;
+
+    // Current Time Task V2 Item
+    TimeTaskItemV2 current_time_task_v2_item = 126;
+
+    // Generator Low Power Settings
+    uint32 generator_low_power_en = 127;
+    uint32 generator_low_power_threshold = 128;
+    uint32 generator_lpg_monitor_en = 129;
+
+    // Device Online Flag
+    uint32 dev_online_flag = 130;
+
+    // Fuels Liquefied Gas
+    uint32 fuels_liquefied_gas_lpg_uint = 131;
+    uint32 fuels_liquefied_gas_lng_uint = 132;
+    int32 utc_timezone = 133;
+    uint32 utc_timezone_id = 134;
+    uint32 utc_set_mode = 135;
+
+    // PV Charge Max List
+    bytes plug_in_info_pv_chg_max_list = 136;
+    bytes plug_in_info_pv2_chg_max_list = 137;
+
+    // SP Charger Car Battery Voltage Setting
+    uint32 sp_charger_car_batt_vol_setting = 138;
+    float sp_charger_car_batt_vol = 139;
+
+    // BMS Error Code
+    uint32 bms_err_code = 140;
+
+    // Error Code Record List
+    ErrcodeRecordList err_code_record_list = 141;
+
+    // Wireless Coordinate Device List
+    bytes wireless_coordinate_dev_list = 142;
+
+    // Wireless Oil Self Start Settings
+    uint32 wireless_oil_self_start = 143;
+    uint32 wireless_oil_on_soc = 144;
+    uint32 wireless_oil_off_soc = 145;
+
+    // Bypass Out Disable
+    bool bypass_out_disable = 146;
+
+    // Output Power Off Memory
+    uint32 output_power_off_memory = 147;
+
+    // PV Charge Type
+    uint32 pv_chg_type = 148;
+
+    // 24V Plug In Info
+    float plug_in_info_24v_vol = 149;
+    float plug_in_info_24v_amp = 150;
+
+    // L1 Plug In Info
+    float plug_in_info_l1_vol = 151;
+
+    // BMS Flow Info
+    uint32 flow_info_bms_dsg = 152;
+    uint32 flow_info_bms_chg = 153;
+
+    // 4P8 Flow Info
+    uint32 flow_info_4p8_1_in = 154;
+    uint32 flow_info_4p8_1_out = 155;
+    uint32 flow_info_4p8_2_in = 156;
+    uint32 flow_info_4p8_2_out = 157;
+
+    // BMS/4P8 Power
+    float pow_get_bms = 158;
+    float pow_get_4p8_1 = 159;
+    float pow_get_4p8_2 = 160;
+
+    // 4P8 Plug In Info
+    uint32 plug_in_info_4p8_1_in_flag = 161;
+    uint32 plug_in_info_4p8_1_type = 162;
+    uint32 plug_in_info_4p8_1_detail = 163;
+    uint32 plug_in_info_4p8_2_in_flag = 164;
+    uint32 plug_in_info_4p8_2_type = 165;
+    uint32 plug_in_info_4p8_2_detail = 166;
+    float plug_in_info_4p8_1_vol = 167;
+    float plug_in_info_4p8_2_vol = 168;
+    float plug_in_info_bms_vol = 169;
+
+    // PV L/H Charger Flag
+    uint32 plug_in_info_pv_l_charger_flag = 170;
+    uint32 plug_in_info_pv_h_charger_flag = 171;
+
+    // Fast Charge Switch
+    bool fast_charge_switch = 182;
+
+    // 4P8 DSG CHG Type
+    uint32 plug_in_info_4p8_1_dsg_chg_type = 183;
+    uint32 plug_in_info_4p8_1_resv = 184;
+    string plug_in_info_4p8_1_sn = 185;
+    string plug_in_info_4p8_1_firm_ver = 186;
+    uint32 plug_in_info_4p8_2_dsg_chg_type = 187;
+    uint32 plug_in_info_4p8_2_resv = 188;
+    string plug_in_info_4p8_2_sn = 189;
+    string plug_in_info_4p8_2_firm_ver = 190;
+
+    // 5P8 DSG CHG
+    uint32 plug_in_info_5p8_dsg_chg = 191;
+    uint32 plug_in_info_5p8_resv = 192;
+    string plug_in_info_5p8_sn = 193;
+    string plug_in_info_5p8_firm_ver = 194;
+
+    // Beep Enable
+    bool en_beep = 195;
+
+    // L1/L2 Plug In Info
+    float plug_in_info_l1_amp = 196;
+    float plug_in_info_l2_vol = 197;
+    float plug_in_info_l2_amp = 198;
+    float plug_in_info_acp_l1_vol = 199;
+
+    // LLC GFCI Flag
+    uint32 llc_gfci_flag = 200;
+    float plug_in_info_acp_l1l2_vol = 201;
+
+    // AC/5P8 Charger Flags
+    uint32 plug_in_info_ac_charger_flag = 202;
+    uint32 plug_in_info_5p8_charger_flag = 203;
+    uint32 plug_in_info_5p8_run_state = 204;
+
+    // 4P8 Charger Flags
+    uint32 plug_in_info_4p8_1_charger_flag = 205;
+    uint32 plug_in_info_4p8_1_run_state = 206;
+    uint32 plug_in_info_4p8_2_charger_flag = 207;
+    uint32 plug_in_info_4p8_2_run_state = 208;
+
+    // AC/5P8 Charge Power Max
+    uint32 plug_in_info_ac_in_chg_pow_max = 209;
+    uint32 plug_in_info_5p8_chg_pow_max = 210;
+
+    // AC Out Frequency
+    uint32 ac_out_freq = 211;
+
+    // Device Sleep State
+    uint32 dev_sleep_state = 212;
+
+    // Error Codes
+    uint32 pd_err_code = 213;
+    uint32 llc_err_code = 214;
+    uint32 mppt_err_code = 215;
+    uint32 plug_in_info_5p8_err_code = 216;
+    uint32 plug_in_info_4p8_1_err_code = 217;
+    uint32 plug_in_info_4p8_2_err_code = 218;
+
+    // Time Task Current
+    uint32 time_task_current = 219;
+
+    // PV H/L Amp
+    float plug_in_info_pv_h_amp = 221;
+    float plug_in_info_pv_l_amp = 222;
+
+    // AC In/Out Amp
+    float plug_in_info_ac_in_amp = 223;
+    float plug_in_info_ac_out_amp = 224;
+    float plug_in_info_5p8_amp = 225;
+
+    // PCS Fan Error Flag
+    uint32 pcs_fan_err_flag = 226;
+    uint32 llc_hv_lv_flag = 227;
+
+    // Child Lock Switch
+    bool child_lock_switch = 228;
+
+    // LLC INV Err Code
+    uint32 llc_inv_err_code = 232;
+
+    // PV L/H Charge Settings
+    uint32 plug_in_info_pv_l_chg_vol_max = 234;
+    uint32 plug_in_info_pv_l_chg_amp_max = 235;
+    uint32 plug_in_info_pv_h_chg_amp_max = 236;
+    uint32 plug_in_info_5p8_dsg_pow_max = 237;
+    uint32 plug_in_info_ac_out_dsg_pow_max = 238;
+
+    // 4P8 Amp
+    float plug_in_info_4p8_1_amp = 239;
+    float plug_in_info_4p8_2_amp = 240;
+
+    // BMS Battery Info
+    uint32 bms_batt_soc = 242;
+    uint32 bms_batt_soh = 243;
+    uint32 bms_design_cap = 248;
+    uint32 bms_dsg_rem_time = 254;
+    uint32 bms_chg_rem_time = 255;
+    int32 bms_min_cell_temp = 258;
+    int32 bms_max_cell_temp = 259;
+    int32 bms_min_mos_temp = 260;
+    int32 bms_max_mos_temp = 261;
+
+    // CMS Battery Info
+    uint32 cms_batt_soc = 262;
+    uint32 cms_batt_soh = 263;
+    uint32 cms_dsg_rem_time = 268;
+    uint32 cms_chg_rem_time = 269;
+    uint32 cms_max_chg_soc = 270;
+    uint32 cms_min_dsg_soc = 271;
+    uint32 cms_oil_on_soc = 272;
+    uint32 cms_oil_off_soc = 273;
+    uint32 cms_oil_self_start = 274;
+    uint32 cms_bms_run_state = 275;
+    uint32 bms_chg_dsg_state = 281;
+    uint32 cms_chg_dsg_state = 282;
+
+    // AC HV/LV Always On
+    uint32 ac_hv_always_on = 283;
+    uint32 ac_lv_always_on = 284;
+
+    // Time Task Conflict
+    uint32 time_task_conflict_flag = 285;
+    uint32 time_task_change_cnt = 286;
+
+    // CMS Battery Capacity
+    uint32 cms_batt_full_cap = 287;
+    uint32 cms_batt_design_cap = 288;
+    uint32 cms_batt_remain_cap = 289;
+
+    // BLE Standby Time
+    uint32 ble_standby_time = 290;
+
+    // DC Power
+    float pow_get_dc = 297;
+
+    // AC Out Open
+    bool ac_out_open = 298;
+
+    // Generator Info
+    uint32 generator_fuels_type = 299;
+    uint32 generator_remain_time = 300;
+    uint32 generator_run_time = 301;
+    uint32 generator_total_output = 302;
+    uint32 generator_abnormal_state = 303;
+    uint32 fuels_oil_val = 304;
+    uint32 fuels_liquefied_gas_type = 305;
+    uint32 fuels_liquefied_gas_uint = 306;
+    float fuels_liquefied_gas_val = 307;
+    float fuels_liquefied_gas_consume_per_hour = 308;
+    float fuels_liquefied_gas_remain_val = 309;
+    uint32 generator_perf_mode = 310;
+    bool generator_engine_open = 311;
+    uint32 generator_out_pow_max = 312;
+    uint32 generator_ac_out_pow_max = 313;
+    uint32 generator_dc_out_pow_max = 314;
+    int32 generator_sub_battery_temp = 315;
+    uint32 generator_sub_battery_soc = 316;
+    uint32 generator_sub_battery_state = 317;
+    uint32 generator_maintence_state = 319;
+
+    // LED Mode
+    uint32 led_mode = 357;
+
+    // Low Power Alarm
+    uint32 low_power_alarm = 358;
+
+    // Silence Charge Watt
+    uint32 silence_chg_watt = 359;
+
+    // PV Flow Info
+    uint32 flow_info_pv = 360;
+    float pow_get_pv = 361;
+    uint32 plug_in_info_pv_flag = 362;
+    uint32 plug_in_info_pv_type = 363;
+    uint32 plug_in_info_pv_charger_flag = 364;
+    uint32 plug_in_info_pv_chg_amp_max = 365;
+    uint32 plug_in_info_pv_chg_vol_max = 366;
+
+    // AC Out Flow Info
+    uint32 flow_info_ac_out = 367;
+    float pow_get_ac_out = 368;
+
+    // PV Temperature
+    int32 temp_pv = 379;
+    float plug_in_info_pv_vol = 380;
+    float plug_in_info_pv_amp = 381;
+
+    // 12V Plug In Info
+    float plug_in_info_12v_vol = 382;
+    float plug_in_info_12v_amp = 383;
+
+    // BMS SN
+    string bms_main_sn = 392;
+
+    // Energy Strategy Operate Mode
+    uint32 energy_strategy_operate_mode = 393;
+    uint32 energy_backup_conflict_flag = 394;
+    uint32 self_powered_conflict_flag = 395;
+    uint32 tou_mode_conflict_flag = 396;
+    uint32 storm_pattern_conflict_flag = 397;
+    uint32 bypass_out_disable_conflict_flag = 398;
+
+    // PV2 Flow Info
+    uint32 flow_info_pv2 = 414;
+
+    // DCP Plug In Info
+    uint32 plug_in_info_pv2_flag = 421;
+    uint32 plug_in_info_pv2_type = 422;
+    uint32 flow_info_dcp_in = 423;
+    uint32 flow_info_dcp_out = 424;
+    float pow_get_dcp = 425;
+    uint32 plug_in_info_dcp_in_flag = 426;
+    uint32 plug_in_info_dcp_type = 427;
+    uint32 plug_in_info_dcp_detail = 428;
+    uint32 plug_in_info_pv2_charger_flag = 430;
+    uint32 plug_in_info_dcp_dsg_chg_type = 431;
+    uint32 plug_in_info_dcp_resv = 432;
+    string plug_in_info_dcp_sn = 433;
+    string plug_in_info_dcp_firm_ver = 434;
+    uint32 plug_in_info_dcp_charger_flag = 435;
+    uint32 plug_in_info_dcp_run_state = 436;
+    uint32 dcdc_err_code = 437;
+    uint32 plug_in_info_dcp_err_code = 438;
+    uint32 plug_in_info_dcp2_err_code = 439;
+
+    // PV2 Temperature
+    int32 temp_pv2 = 440;
+
+    // PV2 Plug In Info
+    float plug_in_info_pv2_vol = 442;
+    float plug_in_info_dcp_vol = 443;
+    float plug_in_info_dcp_amp = 448;
+
+    // INV Error Code
+    uint32 inv_err_code = 450;
+
+    // Generator PV Hybrid Mode
+    uint32 generator_pv_hybrid_mode_open = 451;
+    uint32 generator_pv_hybrid_mode_soc_max = 452;
+
+    // Generator Care Mode
+    uint32 generator_care_mode_open = 453;
+    uint32 generator_care_mode_start_time = 454;
+
+    // AC Energy Saving Open
+    bool ac_energy_saving_open = 455;
+
+    // Multi BP Charge/Discharge Mode
+    uint32 multi_bp_chg_dsg_mode = 456;
+
+    // 5P8 Charge Power Max
+    uint32 plug_in_info_5p8_chg_hal_pow_max = 457;
+    uint32 plug_in_info_ac_in_chg_hal_pow_max = 458;
+
+    // CMS Battery Power Max
+    uint32 cms_batt_pow_out_max = 459;
+    uint32 cms_batt_pow_in_max = 460;
+
+    // Backup Reverse SOC
+    uint32 backup_reverse_soc = 461;
+
+    // CMS Battery Full Energy
+    uint32 cms_batt_full_energy = 462;
+
+    // Display Statistics Sum
+    bytes display_statistics_sum = 463;
+
+    // Storm Pattern
+    uint32 storm_pattern_enable = 467;
+    uint32 storm_pattern_open_flag = 468;
+    uint32 storm_pattern_end_time = 469;
+
+    // Module Active Net Interface
+    uint32 module_active_netif = 479;
+
+    // ATS AC Out Set
+    uint32 ats_ac_out_set = 480;
+
+    // Sharing SOC Conflict Flag
+    uint32 sharing_soc_conflict_flag = 481;
+
+    // SP Charger Car/Dev Battery Type
+    uint32 sp_charger_car_batt_type = 482;
+    uint32 sp_charger_dev_batt_type = 483;
+
+    // Temperature Ambient/Humidity
+    int32 temp_ambient = 484;
+    uint32 humi_ambient = 485;
+
+    // Wave Operating Mode
+    uint32 wave_operating_mode = 486;
+
+    // Temperature Indoor
+    int32 temp_indoor_supply_air = 494;
+
+    // Condensate
+    uint32 condensate_water_level = 504;
+    bool in_drainage = 505;
+    uint32 drainage_mode = 506;
+
+    // Mood Light Mode
+    uint32 mood_light_mode = 507;
+    uint32 lcd_show_temp_type = 508;
+    bool en_pet_care = 509;
+    int32 temp_pet_care_warning = 510;
+    uint32 dev_danger_alarm = 511;
+    uint32 user_temp_unit = 512;
+    uint32 pet_care_warning = 513;
+    uint32 wave_mode_info = 514;
+
+    // System Grid/Load Power
+    float pow_get_sys_grid = 515;
+    float pow_get_sys_load = 516;
+    float pow_get_pv_sum = 517;
+    float pow_get_bp_cms = 518;
+
+    // Home EMS Work Mode
+    uint32 home_ems_work_mode = 519;
+
+    // Feed Grid Mode
+    uint32 feed_grid_mode = 520;
+    uint32 feed_grid_mode_pow_limit = 521;
+    uint32 breaker_capacity_max = 522;
+    uint32 force_off_grid_switch = 523;
+
+    // AC/PV Meter In Flag
+    uint32 ac_meter_in_flag = 524;
+    uint32 energy_storage_type = 525;
+    uint32 pv_meter_in_flag = 526;
+
+    // Manual Clear/Disable Error
+    bytes manual_disable_err_detect = 527;
+    bytes manual_clear_err_code = 528;
+
+    // Meter Data List
+    bytes meter_data_list = 529;
+
+    // System Function Map
+    bytes sys_function_map = 530;
+    bytes sys_selfcheck_result = 531;
+
+    // Module 4G Info
+    string module_4g_iccid = 533;
+    int32 module_4g_snr = 534;
+    int32 module_4g_rssi = 535;
+
+    // EV Charge Settings
+    uint32 ev_chg_amp_max = 538;
+    uint32 ev_chg_mode = 539;
+    uint32 ev_chg_soc_min = 540;
+    uint32 ev_chg_manual_ctrl = 541;
+
+    // LAN Group ID
+    uint32 lan_group_id = 542;
+
+    // Feed Grid PTO Certified
+    bool feed_grid_pto_certified = 543;
+
+    // Portable/Standby Generator Power Setting
+    uint32 portable_generator_pow_setting = 544;
+    uint32 standby_generator_pow_setting = 545;
+
+    // CT Self Adaptive
+    bool ct_self_adaptive = 546;
+
+    // MPPT Energy Type
+    uint32 mppt_energy_type = 547;
+
+    // PCS Shutdown Control
+    bool pcs_shutdown_ctrl = 548;
+
+    // SP Charger Settings
+    bool sp_charger_auto_chg_open = 549;
+    float sp_charger_auto_reverse_chg_vol_min = 550;
+    float sp_charger_auto_chg_vol_min = 551;
+    uint32 sp_charger_car_chg_protect_state = 552;
+    uint32 sp_charger_car_d_plus_signal = 553;
+    uint32 sp_charger_install_type = 554;
+
+    // Active Drain Condensate
+    bool active_drain_condensate = 556;
+    uint32 drain_condensate_state = 557;
+
+    // SP Charger CHG Mode
+    uint32 sp_charger_chg_mode = 581;
+    uint32 sp_charger_run_state = 582;
+    bool sp_charger_is_connect_car = 583;
+
+    // Installment Payment
+    bool installment_payment_serve_enable = 591;
+    uint32 serve_middlemen = 592;
+    uint32 installment_payment_overdue_limit = 593;
+    uint32 installment_payment_state = 594;
+    uint32 installment_payment_start_utc_time = 595;
+    uint32 installment_payment_overdue_limit_utc_time = 596;
+
+    // SP Charger CHG Open/Power Limit
+    bool sp_charger_chg_open = 597;
+    uint32 sp_charger_chg_pow_limit = 598;
+
+    // Module Bluetooth
+    int32 module_bluetooth_snr = 599;
+    int32 module_bluetooth_rssi = 600;
+
+    // Module WiFi
+    int32 module_wifi_snr = 601;
+    int32 module_wifi_rssi = 602;  // WiFi signal strength in dBm (-30 to -90)
+
+    // SP Charger CHG Power Max
+    uint32 sp_charger_chg_pow_max = 603;
+
+    // Parallel Type
+    uint32 parallel_type = 604;
+
+    // ETH/WiFi Status
+    uint32 eth_wan_status = 605;
+    uint32 wifi_sta_status = 606;
+
+    // EPO Status
+    uint32 epo_status = 607;
+
+    // SP Charger Extension Line Settings
+    uint32 sp_charger_extension_line_p_setting = 608;
+    uint32 sp_charger_extension_line_n_setting = 609;
+    uint32 sp_charger_driving_chg_setting = 610;
+
+    // Grid Charge to Battery Enable
+    bool grid_charge_to_battery_enable = 611;
+
+    // Grid Connection Info
+    float grid_connection_vol = 613;
+    float grid_connection_amp = 614;
+    float grid_connection_freq = 615;
+    float grid_connection_power = 616;
+    float grid_connection_reactive_power = 617;
+    float grid_connection_power_factor = 618;
+    uint32 grid_connection_sta = 619;
+
+    // Grid Curtailment Signal
+    bytes grid_curtailment_signal = 620;
+
+    // Low Power Switch
+    bool low_power_switch = 621;
+
+    // MPPT Multi Peak Switch
+    bool mppt_multi_peak_switch = 622;
+
+    // Dev Detect Switch
+    bool dev_detect_switch = 623;
+
+    // SP Charger Battery CHG Amp Limit
+    uint32 sp_charger_car_batt_chg_amp_limit = 624;
+    uint32 sp_charger_dev_batt_chg_amp_limit = 625;
+
+    // SP Charger Dev Battery CHG XT60 Setting
+    uint32 sp_charger_dev_batt_chg_xt60_setting = 626;
+
+    // Device Error Code Lists
+    DevErrcodeList dev_errcode_list = 627;
+    DevModuleErrcodeList dev_module_errcode_list = 628;
+    DevAccessoryErrcodeList dev_accessory_errcode_list = 629;
+
+    // Glacier Car CHG Protect State
+    uint32 glacier_car_chg_protect_state = 631;
+
+    // INV Target Power
+    float inv_target_pwr = 638;
+
+    // Sum Third Party INV Power
+    float pow_get_sum_third_party_inv = 639;
+
+    // SP Charger Car Battery CHG Amp Max
+    uint32 sp_charger_car_batt_chg_amp_max = 723;
+    uint32 sp_charger_car_batt_urgent_chg_state = 724;
+    uint32 sp_charger_dev_batt_chg_amp_max = 725;
+    bool sp_charger_car_batt_urgent_chg_switch = 726;
+
+    // Feed Grid Mode Power Max
+    uint32 feed_grid_mode_pow_max = 727;
+
+    // Country/Town Code
+    uint32 country_code = 728;
+    uint32 town_code = 729;
+
+    // Grid Code Selection/Version
+    uint32 grid_code_selection = 730;
+    uint32 grid_code_version = 731;
+
+    // Factory/Debug Mode Enable
+    bool factory_mode_enable = 732;
+    bool debug_mode_enable = 733;
+
+    // Grid Connection Power Factor/Setting
+    float grid_connection_power_factor_setting = 734;
+    float grid_connection_power_setting = 735;
+
+    // Temperature Refrigerator Zone Settings
+    int32 temp_refrigerator_zone_setting = 736;
+    int32 temp_refrigerator_zone2_setting = 737;
+    bool child_lock_switch_1 = 738;
+    bool temp_refrigerator_zone_range_extend_switch = 739;
+
+    // Glacier Car CHG Protect Vol Setting
+    uint32 glacier_car_chg_protect_vol_setting = 740;
+    uint32 glacier_work_mode = 741;
+
+    // Temperature Refrigerator Zone
+    int32 temp_refrigerator_zone = 742;
+    int32 temp_refrigerator_zone2 = 743;
+    bool refrigerator_door_is_open = 744;
+    uint32 refrigerator_zone_partition = 745;
+    int32 temp_refrigerator_zone_abnormal_setting = 746;
+    int32 temp_refrigerator_zone2_abnormal_setting = 747;
+    bool temp_refrigerator_zone_abnormal_detect_switch = 748;
+
+    // Device Run Time
+    uint32 dev_run_time = 749;
+
+    // Temperature Refrigerator Zone Is Abnormal
+    bool temp_refrigerator_zone_is_abnormal = 750;
+
+    // INV Target Vol
+    uint32 inv_target_vol = 751;
+
+    // Grid Is Energized
+    bool grid_is_energized = 752;
+
+    // Parallel Type Allow
+    uint32 parallel_type_allow = 753;
+
+    // AC Phase Type Allow
+    uint32 ac_phase_type_allow = 754;
+
+    // Grid Relay State
+    uint32 grid_rly_state = 755;
+
+    // CMS SOC/SOH Calibration State
+    uint32 cms_soc_cali_state = 756;
+    uint32 cms_soh_cali_state = 757;
+
+    // Grid System Device Count
+    uint32 grid_sys_device_cnt = 758;
+
+    // WiFi AP Mesh ID
+    WifiApMeshIdInfo wifi_ap_mesh_id = 759;
+
+    // Power Consumption Measurement
+    bool pow_consumption_measurement = 760;
+
+    // Light Language
+    uint32 light_language = 761;
+
+    // Grid Connection Flag L1/L2/L3
+    uint32 grid_connection_flag_l1 = 762;
+    uint32 grid_connection_flag_l2 = 763;
+    uint32 grid_connection_flag_l3 = 764;
+
+    // Panel Bus Voltage
+    float panel_bus_vol = 769;
+
+    // Screen Clock Display Index
+    uint32 screen_clock_display_index = 770;
+
+    // Grid Connection Vol/Power L3
+    float grid_connection_vol_l3 = 771;
+    float grid_connection_power_l3 = 772;
+
+    // Grid Connection Data Record
+    bytes grid_connection_data_record = 773;
+
+    // Self Consume Power
+    float pow_get_self_consume = 777;
+
+    // Power Off Delay
+    uint32 power_off_delay_set = 778;
+    uint32 power_off_delay_remaining = 779;
+
+    // Device Rate Power
+    uint32 dev_rate_power = 780;
+
+    // Standby/Portable Generator Power
+    float pow_get_standy_generator = 781;
+    float pow_get_portable_generator = 782;
+
+    // CT Install Config List
+    CTInstallConfigList ct_install_config_list = 783;
+
+    // Grid Connection Amp L3
+    float grid_connection_amp_l3 = 784;
+
+    // Cloud Meter
+    CloudMeter cloud_metter = 785;
+
+    // BP Group Info List
+    BpGroupList bp_group_info_list = 786;
+
+    // SP Car/BMS CHG Mode
+    uint32 sp_car_mode = 787;
+    uint32 sp_bms_chg_mode = 788;
+    uint32 sp_fast_chg_max_soc = 789;
+
+    // Oil Max Power
+    uint32 oil_max_power = 792;
+    uint32 oil_max_charge_power = 793;
+
+    // Load Channel Status (1-12)
+    LoadChSta load_ch1_sta = 794;
+    LoadChSta load_ch2_sta = 795;
+    LoadChSta load_ch3_sta = 796;
+    LoadChSta load_ch4_sta = 797;
+    LoadChSta load_ch5_sta = 798;
+    LoadChSta load_ch6_sta = 799;
+    LoadChSta load_ch7_sta = 800;
+    LoadChSta load_ch8_sta = 801;
+    LoadChSta load_ch9_sta = 802;
+    LoadChSta load_ch10_sta = 803;
+    LoadChSta load_ch11_sta = 804;
+    LoadChSta load_ch12_sta = 805;
+
+    // Mid Priority Discharge Low
+    uint32 mid_priority_discharge_low = 806;
+
+    // Access Device Info (1-4)
+    AccessDevInfo access_dev_1_info = 807;
+    AccessDevInfo access_dev_2_info = 808;
+    AccessDevInfo access_dev_3_info = 809;
+    AccessDevInfo access_dev_4_info = 810;
+
+    // Power External PV INV In
+    float pow_exter_pv_inv_in_w = 811;
+    float pow_home_energy_pv_in_cms = 812;
+    float pow_oil_in_w = 813;
+
+    // Panel Generate Energy
+    uint32 panel_generate_energy_run_sta = 814;
+    uint32 panel_generate_energy_soc_cms = 815;
+    uint32 panel_generate_energy_battery_sta_cms = 816;
+    float panel_generate_energy_battery_power_cms = 817;
+
+    // Load Channel Power/Current/Voltage
+    float load_ch_power = 818;
+    float load_ch_curr = 819;
+    float load_ch_vol = 820;
+
+    // User First Config Flag
+    bool user_first_config_flag = 821;
+
+    // Screen Saver Settings
+    bool screen_saver_switch_enable = 822;
+    uint32 screen_saver_display_times = 823;
+    uint32 screen_saver_display_index = 824;
+
+    // Screen Clock Settings
+    bool screen_clock_switch_enable = 825;
+    uint32 screen_clock_display_times = 826;
+    uint32 screen_clock_display_format = 827;
+    bool screen_follow_gravity_switch = 828;
+    uint32 screen_theme_display_index = 829;
+
+    // LED Settings
+    bool led_switch_enable = 830;
+    uint32 led_idle_state_color = 831;
+    uint32 led_charge_state_color = 832;
+    uint32 led_discharge_state_color = 833;
+    uint32 led_low_battery_state_color = 834;
+    bool low_power_alarm_switch = 835;
+
+    // TypeC Port Enable (1-4)
+    bool typec1_port_enable = 836;
+    bool typec2_port_enable = 837;
+    bool typec3_port_enable = 838;
+    bool typec4_port_enable = 839;
+    bool usb1_port_enable = 840;
+
+    // Pogopin Port Enable
+    uint32 pogopin_port_enable = 841;
+    uint32 port_power_distribute_mode = 842;
+
+    // TypeC Max Allow Power (3-4)
+    float typec3_max_allow_pow = 843;
+    float typec4_max_allow_pow = 844;
+    float pogopin_max_allow_pow = 845;
+    float typec2_max_allow_pow = 846;
+    float typec1_max_allow_pow = 847;
+
+    // Battery Maintain Model
+    uint32 battery_maintain_model = 848;
+
+    // Charge Optimization Control
+    bool charge_opt_ctrl_enable = 849;
+    uint32 charge_opt_state = 850;
+
+    // USB Type-C Ports Display Info
+    UsbRealDisplayInfo usb_typec1_display_info = 852;
+    UsbRealDisplayInfo usb_typec3_display_info = 853;
+    UsbRealDisplayInfo usb_typec4_display_info = 854;
+    UsbRealDisplayInfo usb_typea1_display_info = 855;
+    UsbRealDisplayInfo usb_typec2_display_info = 856;
+
+    // Pogopin Port Display Info
+    UsbRealDisplayInfo pogopin_1_display_info = 857;
+    PogopinAccessInfo pogopin_1_access_info = 858;
+
+    // Access Device Info (5-10)
+    AccessDevInfo access_dev_5_info = 894;
+    AccessDevInfo access_dev_6_info = 895;
+    AccessDevInfo access_dev_7_info = 896;
+    AccessDevInfo access_dev_8_info = 897;
+    AccessDevInfo access_dev_9_info = 898;
+    AccessDevInfo access_dev_10_info = 899;
+
+    // Panel Running Mode
+    uint32 panel_running_mode = 900;
+
+    // Grid Connection Apparent Power
+    float grid_connection_apparent_power = 919;
+
+    // Load Channel Status (13-48)
+    LoadChSta load_ch13_sta = 920;
+    LoadChSta load_ch14_sta = 921;
+    LoadChSta load_ch15_sta = 922;
+    LoadChSta load_ch16_sta = 923;
+    LoadChSta load_ch17_sta = 924;
+    LoadChSta load_ch18_sta = 925;
+    LoadChSta load_ch19_sta = 926;
+    LoadChSta load_ch20_sta = 927;
+    LoadChSta load_ch21_sta = 928;
+    LoadChSta load_ch22_sta = 929;
+    LoadChSta load_ch23_sta = 930;
+    LoadChSta load_ch24_sta = 931;
+    LoadChSta load_ch25_sta = 932;
+    LoadChSta load_ch26_sta = 933;
+    LoadChSta load_ch27_sta = 934;
+    LoadChSta load_ch28_sta = 935;
+    LoadChSta load_ch29_sta = 936;
+    LoadChSta load_ch30_sta = 937;
+    LoadChSta load_ch31_sta = 938;
+    LoadChSta load_ch32_sta = 939;
+    LoadChSta load_ch33_sta = 940;
+    LoadChSta load_ch34_sta = 941;
+    LoadChSta load_ch35_sta = 942;
+    LoadChSta load_ch36_sta = 943;
+    LoadChSta load_ch37_sta = 944;
+    LoadChSta load_ch38_sta = 945;
+    LoadChSta load_ch39_sta = 946;
+    LoadChSta load_ch40_sta = 947;
+    LoadChSta load_ch41_sta = 948;
+    LoadChSta load_ch42_sta = 949;
+    LoadChSta load_ch43_sta = 950;
+    LoadChSta load_ch44_sta = 951;
+    LoadChSta load_ch45_sta = 952;
+    LoadChSta load_ch46_sta = 953;
+    LoadChSta load_ch47_sta = 954;
+    LoadChSta load_ch48_sta = 955;
+
+    // Grid Connection Vol/Amp/Freq L1/L2
+    float grid_connection_vol_l1 = 956;
+    float grid_connection_vol_l2 = 957;
+    float grid_connection_amp_l1 = 958;
+    float grid_connection_amp_l2 = 959;
+    float grid_connection_freq_l1 = 960;
+    float grid_connection_freq_l2 = 961;
+    float grid_connection_power_l1 = 962;
+    float grid_connection_power_l2 = 963;
+    float grid_connection_reactive_power_l1 = 964;
+    float grid_connection_reactive_power_l2 = 965;
+    float grid_connection_apparent_power_l1 = 966;
+    float grid_connection_apparent_power_l2 = 967;
+
+    // Power Outages List
+    PowerOutagesList power_outages_list = 968;
+
+    // Power Lists
+    bytes pow_get_12v_list = 969;
+    bytes plug_in_info_12v_amp_list = 970;
+
+    // AC2 Out Flow Info
+    uint32 flow_info_ac2_out = 971;
+    bytes pow_get_ac_out_list = 972;
+    bytes plug_in_info_ac_out_amp_list = 973;
+
+    // STD Proto Version
+    uint32 std_proto_version = 975;
+
+    // Timezone Change List
+    TimezoneChangeList timezone_change_list = 976;
+
+    // Update Ban Flag
+    uint32 update_ban_flag = 977;
+
+    // Day Resident Load List
+    DayResidentLoadList day_resident_load_list = 978;
+
+    // TypeC3 Flow Info
+    uint32 flow_info_typec3 = 979;
+
+    // Relay On/Off
+    bool relay2_onoff = 980;
+    bool relay4_onoff = 981;
+    bool relay3_onoff = 982;
+    bool relay1_onoff = 983;
+
+    // System Group ID
+    uint32 system_group_id = 984;
+
+    // Power System AC Out Max
+    uint32 pow_sys_ac_out_max = 985;
+
+    // Module WiFi SSID
+    string module_wifi_ssid = 986;
+
+    // PV3/PV4 Plug In Info
+    uint32 plug_in_info_pv3_flag = 987;
+    uint32 plug_in_info_pv4_flag = 988;
+
+    // Power System AC In Max
+    uint32 pow_sys_ac_in_max = 989;
+
+    // Distributed Device Status
+    uint32 distributed_device_status = 990;
+    uint32 series_connect_device_status = 991;
+
+    // System Grid Connection Power
+    float sys_grid_connection_power = 992;
+
+    // Socket Measure Power
+    float socket_measure_power = 993;
+
+    // Brightness
+    uint32 brightness = 994;
+
+    // System Mesh ID
+    uint32 system_mesh_id = 995;
+
+    // PV3/PV4 Power
+    float pow_get_pv3 = 996;
+    float pow_get_pv4 = 997;
+    float plug_in_info_pv3_vol = 998;
+    float plug_in_info_pv3_amp = 999;
+    float plug_in_info_pv4_vol = 1000;
+    float plug_in_info_pv4_amp = 1001;
+
+    // Power System Load From PV/Grid/BP
+    float pow_get_sys_load_from_pv = 1002;
+    float pow_get_sys_load_from_bp = 1003;
+    float pow_get_sys_load_from_grid = 1004;
+
+    // Panel Generate Energy Battery Info (1-10)
+    bytes panel_generate_energy_battery_info_1 = 1005;
+    bytes panel_generate_energy_battery_info_2 = 1006;
+    bytes panel_generate_energy_battery_info_3 = 1007;
+    bytes panel_generate_energy_battery_info_4 = 1008;
+    bytes panel_generate_energy_battery_info_5 = 1009;
+    bytes panel_generate_energy_battery_info_6 = 1010;
+    bytes panel_generate_energy_battery_info_7 = 1011;
+    bytes panel_generate_energy_battery_info_8 = 1012;
+    bytes panel_generate_energy_battery_info_9 = 1013;
+    bytes panel_generate_energy_battery_info_10 = 1014;
+
+    // Load Channel Sample Info (1-12)
+    LoadChSampleInfo load_ch1_sample_info = 1015;
+    LoadChSampleInfo load_ch2_sample_info = 1016;
+    LoadChSampleInfo load_ch3_sample_info = 1017;
+    LoadChSampleInfo load_ch4_sample_info = 1018;
+    LoadChSampleInfo load_ch5_sample_info = 1019;
+    LoadChSampleInfo load_ch6_sample_info = 1020;
+    LoadChSampleInfo load_ch7_sample_info = 1021;
+    LoadChSampleInfo load_ch8_sample_info = 1022;
+    LoadChSampleInfo load_ch9_sample_info = 1023;
+    LoadChSampleInfo load_ch10_sample_info = 1024;
+    LoadChSampleInfo load_ch11_sample_info = 1025;
+    LoadChSampleInfo load_ch12_sample_info = 1026;
+
+    // Panel Bus Vol L1/L2
+    float panel_bus_vol_l1 = 1063;
+    float panel_bus_vol_l2 = 1064;
+
+    // EPS Switch Status
+    uint32 eps_switch_sta = 1065;
+
+    // Grid Connection Vol/Freq Settings
+    uint32 grid_connection_vol_setting = 1213;
+    uint32 grid_connection_freq_setting = 1214;
+
+    // Smart Switch Max Current
+    uint32 smart_switch_max_cur = 1215;
+
+    // Panel Master Break Current Set
+    uint32 panel_master_break_cur_set = 1216;
+
+    // Panel Smart Module Access Status
+    uint32 panel_smart_module_access_sta = 1223;
+
+    // Panel Backup Channel Info (1-3)
+    bytes panel_backup_ch1_info = 1224;
+    bytes panel_backup_ch2_info = 1225;
+    bytes panel_backup_ch3_info = 1226;
+
+    // Power Get Load Input/Output Sum
+    float pow_get_load_output_sum = 1227;
+    float pow_get_load_input_sum = 1228;
+
+    // BMS Battery Heat
+    bool bms_battery_heat = 1229;
+
+    // Panel Oil Info
+    bytes panel_oil_info_1 = 1230;
+    bytes panel_oil_info_2 = 1232;
+    bytes panel_oil_info_3 = 1234;
+
+    // System Install Location
+    uint32 system_install_location = 1236;
+
+    // Location Latitude/Longitude
+    float location_latitude = 1238;
+    float location_longitude = 1240;
+
+    // Switch Self Check Result
+    uint32 switch_selfcheck_result = 1243;
+
+    // Panel Max Charge Power Set
+    uint32 panel_max_charge_pow_set = 1244;
+
+    // Panel Energy Strategy Operate Mode
+    uint32 panle_energy_strategy_operate_mode = 1245;
+
+    // Grid CHG Power Max
+    uint32 grid_chg_pow_max = 1246;
+
+    // Panel Master Slave Set
+    uint32 panel_master_slave_set = 1247;
+
+    // Panel CT Position
+    PanelCTPositionList panel_ct_position = 1248;
+
+    // Temperature Smart Control Enable
+    bool temp_smart_ctrl_enable = 1249;
+
+    // Low Power DSG Control Enable
+    bool low_power_dsg_ctrl_enable = 1250;
+
+    // CMS Battery Cycle Number
+    uint32 cms_batt_cycle_num = 1251;
+
+    // Battery Maintain Cycle Number
+    uint32 battery_maintain_cycle_num = 1252;
+
+    // Mid Priority Battery Type
+    uint32 mid_priority_bat_type = 1253;
+
+    // USB Type-A2 Display Info
+    UsbRealDisplayInfo usb_typea2_display_info = 1254;
+
+    // Panel EDEV Info
+    bytes panel_edev_info_1 = 1255;
+    bytes panel_edev_info_2 = 1256;
+    bytes panel_edev_info_3 = 1257;
+
+    // Do Not Disturb Mode Setting
+    DoNotDisturbMode do_not_disturb_mode_setting = 1258;
+
+    // Screen Clock Display Times Charging
+    uint32 screen_clock_display_times_charging = 1259;
+
+    // Flow Info Grid Out
+    uint32 flow_info_grid_out = 1260;
+
+    // Grid Connection Vol Type
+    uint32 grid_connection_vol_type = 1261;
+
+    // Screen Picture Preview
+    uint32 screen_pic_preview = 1262;
+    uint32 screen_source_file_recv_sta = 1263;
+
+    // PV Vol Low/Weak Source Flag
+    bool plug_in_info_pv_vol_low_flag = 1264;
+    bool plug_in_info_pv_weak_source_flag = 1265;
+
+    // Device Standby Duration
+    uint32 dev_standby_duration = 1266;
+
+    // Camping Lamp Mode List
+    CampingLampModeList camping_lamp_mode_list = 1267;
+
+    // Device Charging Number
+    uint32 dev_charging_number = 1268;
+    uint32 dev_active_time = 1269;
+    float dev_active_power_consumption = 1270;
+
+    // DC 12V Out Open
+    bool dc_12v_out_open = 1273;
+
+    // CMS Energy Out/In Sum
+    float cms_energy_out_sum = 1274;
+    float cms_energy_in_sum = 1275;
+
+    // Last Used Time
+    uint32 last_used_time = 1276;
+
+    // Camping Lamp Watt
+    float camping_lamp_watt = 1277;
+
+    // Device Control Status
+    uint32 dev_ctrl_status = 1278;
+
+    // Power Outages Active Flag
+    bool power_outages_active_flag = 1279;
+
+    // Series Connect Device ID
+    uint32 series_connect_device_id = 1285;
+
+    // DC12V/Lamp Delay Close
+    uint32 dc12v_delay_close = 1286;
+    uint32 lamp_delay_close = 1287;
+
+    // Camping Lamp Mode Select
+    CampingLampModeSelect camping_lamp_mode_select = 1288;
+
+    // PV2 Weak Source Flag
+    bool plug_in_info_pv2_weak_source_flag = 1289;
+
+    // Camping Lamp Delay Close Remain Time
+    uint32 camping_lamp_delay_close_remain_time = 1290;
+    uint32 dc12v_delay_close_remain_time = 1291;
+
+    // Use LAN Meter
+    bool use_lan_meter = 1292;
+
+    // Grid Type
+    uint32 grid_type = 1447;
+
+    // CTR Load Use Power SOC
+    uint32 ctr_load_use_pwr_soc = 1448;
+
+    // PCS Cell Type
+    uint32 pcs_cell_type = 1449;
+
+    // AC Out Delay Close
+    uint32 ac_out_delay_close = 1450;
+    uint32 ac_out_delay_close_remain_time = 1451;
+
+    // DC12V INOUT Type
+    uint32 dc12v_inout_type = 1452;
+
+    // BP SOC Equal Flag
+    bool bp_soc_equal_flag = 1453;
+
+    // Module Relay Type (1-5)
+    uint32 module_1_rly_type = 1454;
+    uint32 module_2_rly_type = 1455;
+    uint32 module_3_rly_type = 1456;
+    uint32 module_4_rly_type = 1457;
+    uint32 module_5_rly_type = 1458;
+
+    // Last BMS CHG Unix Time
+    uint32 last_bms_chg_unix_time = 1459;
+
+    // AC2 Standby Time
+    uint32 ac2_standby_time = 1460;
+
+    // Output Power Factor List
+    OutputPowerFactorList output_power_factor_list = 1461;
+
+    // CMS Battery Power In Remain
+    uint32 cms_batt_pow_in_remain = 1462;
+
+    // L1/L2 Plug In Info
+    float plug_in_info_l1_vol_1 = 1463;
+    float plug_in_info_l1_amp_1 = 1464;
+    float plug_in_info_l2_vol_1 = 1465;
+    float plug_in_info_l2_amp_1 = 1466;
+
+    // L1/L2 Power
+    float pow_get_l1 = 1467;
+    float pow_get_l2 = 1468;
+
+    // INV NTC Temperature (2-3)
+    int32 inv_ntc_temp2 = 1469;
+
+    // EMS FSM State
+    uint32 ems_fsmstate = 1470;
+
+    // Color RGB
+    uint32 color_rgb = 1471;
+
+    // CMS BP Online Count
+    uint32 cms_bp_online_cnt = 1472;
+
+    // Target Theme Type
+    uint32 target_theme_type = 1473;
+
+    // Auto Switch Theme
+    bool auto_switch_theme = 1474;
+
+    // LED Belt Color Follow Real Appearance Switch
+    bool led_belt_color_follow_real_appearance_switch = 1475;
+
+    // DT PV Power Current (1-8)
+    float dt_pv_pwr_current = 1476;
+    float dt_pv2_pwr_current = 1477;
+    float dt_pv3_pwr_current = 1478;
+    float dt_pv4_pwr_current = 1479;
+    float dt_pv5_pwr_current = 1480;
+    float dt_pv6_pwr_current = 1481;
+    float dt_pv7_pwr_current = 1482;
+    float dt_pv8_pwr_current = 1483;
+
+    // AC In Open
+    bool ac_in_open = 1484;
+
+    // CT Current (1-3)
+    float ct1_current = 1485;
+    float ct2_current = 1486;
+    float ct3_current = 1487;
+
+    // Manual Emergency Backup Switch
+    bool manual_emergency_backup_switch = 1498;
+
+    // Sub Panel Is Connect
+    bool sub_panel_is_connect = 1499;
+
+    // Panel Home Scene
+    uint32 panel_home_scene = 1500;
+
+    // Low Current Mode
+    uint32 low_current_mode = 1540;
+
+    // Power Home Load
+    float pow_home_load = 1544;
+    float pow_ev_load_w = 1545;
+    float pow_third_ev_w = 1546;
+    float pow_sub_panel_load_w = 1547;
+
+    // EV CHG Manual Wait Reason
+    uint32 ev_chg_manual_wait_reason = 1552;
+
+    // Device Temperature (1-5)
+    int32 dev_temperature_1 = 1553;
+    int32 dev_temperature_2 = 1554;
+    int32 dev_temperature_3 = 1555;
+    int32 dev_temperature_4 = 1556;
+    int32 dev_temperature_5 = 1557;
+
+    // Is Have Portable/Standby Generator
+    bool is_have_portable_generator = 1558;
+    bool is_have_standby_generator = 1559;
+
+    // Backup SOC VPP
+    uint32 backup_soc_vpp = 1560;
+
+    // Generator Max DSG To Load Point
+    uint32 generator_max_dsg_to_load_point = 1602;
+
+    // Last Stop Charge SOC
+    uint32 last_stop_charge_soc = 1616;
+
+    // PD Firm Ver Display
+    string pd_firm_ver_display = 1645;
+
+    // Backup Box Mode
+    uint32 backup_box_mode = 1652;
+
+    // Screen Light Off Start/End Time
+    uint32 screen_light_off_start_time = 1653;
+    uint32 screen_light_off_end_time = 1654;
+    uint32 screen_keep_light_on_time = 1655;
+    uint32 screen_keep_light_off_time = 1656;
+
+    // BKB Main Ctrl Type
+    uint32 bkb_main_ctrl_type = 1670;
+    uint32 bkb_mc_connect_sta = 1671;
+
+    // Low Battery Tip Event Timestamp
+    uint32 low_battery_tip_event_timestamp = 1672;
+
+    // CT Active Power (1-3)
+    float ct1_active_pwr = 1673;
+    float ct2_active_pwr = 1674;
+    float ct3_active_pwr = 1675;
+
+    // Standby Generator Ctrl Signal Type
+    uint32 standby_generator_ctrl_signal_type = 1676;
+
+    // Power Limit Flag
+    uint32 power_limit_flag = 1680;
+
+    // VPP Task Status
+    bytes vpp_task_status = 1681;
+
+    // CMS Battery Store Energy
+    uint32 cms_batt_store_energy = 1682;
+}

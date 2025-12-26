@@ -53,6 +53,11 @@ ecoflow-prometheus-exporter/
     │   ├── rest.py            # RestApiClient (polling)
     │   ├── mqtt.py            # MqttApiClient (push-based)
     │   └── device.py          # DeviceApiClient (request/reply)
+    ├── proto/
+    │   ├── decoder.py         # Generic protobuf decoder
+    │   ├── common.proto       # Common header messages
+    │   ├── device_common.proto # Device status messages
+    │   └── *_pb2.py           # Generated protobuf modules
     ├── metrics/
     │   └── prometheus.py      # EcoflowMetric wrapper
     └── worker.py              # Worker (collection loop)
@@ -125,3 +130,13 @@ ecoflow-prometheus-exporter/
 | Reliability | High | Depends on push | High (active requests) |
 
 **Recommendation**: Use Device API (`ECOFLOW_API_TYPE=device`) for best compatibility with all EcoFlow devices.
+
+## Protobuf Support
+
+The exporter automatically handles both JSON and binary protobuf messages from EcoFlow devices. No configuration is required - the generic protobuf decoder works with all EcoFlow devices.
+
+The decoder processes `DisplayPropertyUpload` messages (cmd_func=254, cmd_id=21) which contain device status and metrics. Other message types are logged for debugging purposes.
+
+Proto definitions are in `ecoflow/proto/`:
+- `common.proto`: Header message format for MQTT communication
+- `device_common.proto`: Device status and metric message definitions

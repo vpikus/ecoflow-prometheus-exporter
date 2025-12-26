@@ -8,7 +8,7 @@ import uuid
 from multiprocessing import Process
 from queue import Empty, Queue
 from threading import Lock, Timer
-from typing import Any
+from typing import Any, Callable
 
 import paho.mqtt.client as mqtt
 import requests
@@ -123,12 +123,14 @@ class MqttConnection:
         self,
         device_sn: str,
         auth: MqttAuthentication,
-        message_callback: callable,
+        message_callback: Callable[[str], None],
         timeout_seconds: int = MQTT_TIMEOUT,
+        binary_callback: Callable[[bytes], None] | None = None,
     ):
         self.device_sn = device_sn
         self.auth = auth
         self.message_callback = message_callback
+        self.binary_callback = binary_callback
         self.timeout_seconds = timeout_seconds
 
         self.topic = f"/app/device/property/{device_sn}"
@@ -196,7 +198,11 @@ class MqttConnection:
             payload = message.payload.decode("utf-8")
             self.message_callback(payload)
         except UnicodeDecodeError:
-            log.warning("Failed to decode MQTT message")
+            # Binary payload (protobuf)
+            if self.binary_callback:
+                self.binary_callback(message.payload)
+            else:
+                log.warning("Received binary MQTT message but no binary handler configured")
 
 
 class MqttApiClient(EcoflowApiClient):
@@ -204,10 +210,20 @@ class MqttApiClient(EcoflowApiClient):
 
     This client connects to EcoFlow's MQTT broker to receive real-time
     device data. Unlike REST API, MQTT is push-based so metrics are
-    cached as they arrive.
+    cached as they arrive. Supports both JSON and protobuf message formats.
+
+    Args:
+        username: EcoFlow account email.
+        password: EcoFlow account password.
+        device_sn: Device serial number.
     """
 
-    def __init__(self, username: str, password: str, device_sn: str):
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        device_sn: str,
+    ):
         self.device_sn = device_sn
         self.auth = MqttAuthentication(username, password)
 
@@ -217,6 +233,11 @@ class MqttApiClient(EcoflowApiClient):
         self._mqtt: MqttConnection | None = None
         self._idle_timer: RepeatTimer | None = None
 
+        # Initialize generic protobuf decoder for all devices
+        from ..proto.decoder import get_decoder
+        self._proto_decoder = get_decoder()
+        log.info("Protobuf decoder enabled")
+
     def connect(self) -> None:
         """Authenticate and connect to MQTT broker."""
         self.auth.authorize()
@@ -225,6 +246,7 @@ class MqttApiClient(EcoflowApiClient):
             self.device_sn,
             self.auth,
             self._handle_message,
+            binary_callback=self._handle_binary_message,
         )
         self._mqtt.connect()
 
@@ -296,6 +318,20 @@ class MqttApiClient(EcoflowApiClient):
             log.error("Failed to parse MQTT payload: %s", e)
         except Exception as e:
             log.error("Error processing MQTT message: %s", e)
+
+    def _handle_binary_message(self, payload: bytes) -> None:
+        """Process incoming binary (protobuf) MQTT message."""
+        try:
+            params = self._proto_decoder.decode(payload)
+
+            if params:
+                with self._cache_lock:
+                    self._quota_cache.update(params)
+                    self._last_update = time.time()
+
+                log.debug("Updated cache with %d protobuf parameters", len(params))
+        except Exception as e:
+            log.error("Error processing protobuf message: %s", e)
 
     def _check_idle(self) -> None:
         """Check for idle connection and reconnect if needed."""

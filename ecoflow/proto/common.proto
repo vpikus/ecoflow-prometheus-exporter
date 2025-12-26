@@ -1,0 +1,67 @@
+// Contains the base Header message used for MQTT communication
+
+syntax = "proto3";
+
+// Header - Base message for all EcoFlow MQTT communications
+// Contains routing info, encryption settings, and the encrypted payload (pdata)
+message Header {
+    bytes pdata = 1;           // Encrypted payload data (use XOR with seq when enc_type=1 and src!=32)
+    int32 src = 2;             // Source address
+    int32 dest = 3;            // Destination address
+    int32 d_src = 4;           // Device source
+    int32 d_dest = 5;          // Device destination
+    int32 enc_type = 6;        // Encryption type (1 = XOR encryption)
+    int32 check_type = 7;      // Checksum type
+    int32 cmd_func = 8;        // Command function
+    int32 cmd_id = 9;          // Command ID
+    int32 data_len = 10;       // Data length
+    int32 need_ack = 11;       // Whether acknowledgment is needed
+    int32 is_ack = 12;         // Whether this is an acknowledgment
+    // Note: field 13 is skipped
+    int32 seq = 14;            // Sequence number (used for XOR decryption key)
+    int32 product_id = 15;     // Product ID (e.g., 23809 = Rapid PRO Desktop Charger)
+    int32 version = 16;        // Protocol version
+    int32 payload_ver = 17;    // Payload version
+
+    // Optional fields (proto3 optional)
+    optional int32 time_snap = 18;    // Timestamp
+    optional int32 is_rw_cmd = 19;    // Is read/write command
+    optional int32 is_queue = 20;     // Is queued
+    optional int32 ack_type = 21;     // Acknowledgment type
+    optional string code = 22;        // Response code
+    optional string from = 23;        // From identifier
+    optional string module_sn = 24;   // Module serial number
+    optional string device_sn = 25;   // Device serial number
+    optional string src_sn = 26;      // Source serial number
+    optional string dest_sn = 27;     // Destination serial number
+}
+
+// Send_Header_Msg - Container for multiple Header messages
+// This is the top-level message received from MQTT
+message Send_Header_Msg {
+    repeated Header msg = 1;   // List of Header messages
+}
+
+// SendMsgHart - Heartbeat/keep-alive message variant
+// Similar to Header but with different field ordering for some fields
+message SendMsgHart {
+    int32 link_id = 1;         // Link identifier
+    int32 src = 2;             // Source address
+    int32 dest = 3;            // Destination address
+    int32 d_src = 4;           // Device source
+    int32 d_dest = 5;          // Device destination
+    int32 enc_type = 6;        // Encryption type
+    int32 check_type = 7;      // Checksum type
+    int32 cmd_func = 8;        // Command function
+    int32 cmd_id = 9;          // Command ID
+    int32 data_len = 10;       // Data length
+    int32 need_ack = 11;       // Whether acknowledgment is needed
+    int32 is_ack = 12;         // Whether this is an acknowledgment
+    int32 ack_type = 13;       // Acknowledgment type
+    int32 seq = 14;            // Sequence number
+    int32 time_snap = 15;      // Timestamp
+    int32 is_rw_cmd = 16;      // Is read/write command
+    int32 is_queue = 17;       // Is queued
+    int32 product_id = 18;     // Product ID
+    int32 version = 19;        // Protocol version
+}
