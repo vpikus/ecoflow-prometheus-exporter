@@ -7,6 +7,7 @@ import time
 from prometheus_client import REGISTRY, start_http_server
 
 from ecoflow.api import EcoflowApiException, create_client
+from ecoflow.api import CredentialsConflictError
 from ecoflow.worker import Worker
 
 EXPORTER_PORT = int(os.getenv("EXPORTER_PORT", "9090"))
@@ -51,7 +52,10 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        client = create_client()
+        client = create_client(device_sn)
+    except CredentialsConflictError as e:
+        log.error(str(e))
+        sys.exit(1)
     except ValueError as e:
         log.error(str(e))
         sys.exit(1)
