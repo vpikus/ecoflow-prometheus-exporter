@@ -1,10 +1,11 @@
 FROM python:3.12-alpine
 
-RUN apk update && apk add py3-pip
+WORKDIR /app
 
-ADD requirements.txt /requirements.txt
-RUN pip install -r /requirements.txt
+ADD requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-ADD ecoflow_prometheus.py /ecoflow_prometheus.py
+ADD ecoflow_prometheus.py .
+ADD ecoflow/ ./ecoflow/
 
-CMD [ "python", "/ecoflow_prometheus.py" ]
+CMD [ "python", "ecoflow_prometheus.py" ]

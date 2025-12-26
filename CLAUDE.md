@@ -1,18 +1,12 @@
-# EcoFlow Prometheus Exporter
+# CLAUDE.md
 
-A Prometheus metrics exporter for EcoFlow devices that collects real-time data from the EcoFlow IoT API.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Structure
+## Project Overview
 
-```
-├── ecoflow_prometheus.py    # Main application (all classes in single file)
-├── requirements.txt         # Python dependencies
-├── Dockerfile              # Container definition (python:3.12-alpine)
-├── dev/                    # Development environment (docker-compose, .env)
-└── grafana/dashboard/      # Pre-built Grafana dashboard
-```
+Prometheus metrics exporter for EcoFlow devices. Supports REST API with developer tokens (access_key/secret_key). Architecture designed to support future MQTT backend with user credentials.
 
-## Quick Commands
+## Commands
 
 ```bash
 # Install dependencies
@@ -34,50 +28,62 @@ cd dev && docker-compose up
 
 ## Architecture
 
-### Key Classes (ecoflow_prometheus.py)
+```
+ecoflow-prometheus-exporter/
+├── ecoflow_prometheus.py      # Entry point
+└── ecoflow/
+    ├── api/
+    │   ├── __init__.py        # Factory: create_client()
+    │   ├── base.py            # EcoflowApiClient (ABC)
+    │   ├── models.py          # DeviceInfo, EcoflowApiException
+    │   └── rest.py            # RestApiClient implementation
+    ├── metrics/
+    │   └── prometheus.py      # EcoflowMetric wrapper
+    └── worker.py              # Worker (polling loop)
+```
 
-- **EcoflowAuthentication**: HMAC-SHA256 signature generation for API auth
-- **EcoflowClient**: REST API client for EcoFlow IoT endpoints
-- **EcoflowMetric**: Prometheus metric wrapper with automatic label handling
-- **Worker**: Main loop that collects and exports metrics
+### Key Components
 
-### API Endpoints Used
+1. **EcoflowApiClient** (`ecoflow/api/base.py`): Abstract interface for API backends
+   - `connect()`: Establish connection
+   - `get_devices()`: List all devices
+   - `get_device(sn)`: Get device by serial number
+   - `get_device_quota(sn)`: Get device metrics
 
-- `https://api.ecoflow.com/iot-open/sign/device/list` - List devices
-- `https://api.ecoflow.com/iot-open/sign/device/quota/all` - Device statistics
+2. **RestApiClient** (`ecoflow/api/rest.py`): REST API implementation
+   - Uses HMAC-SHA256 authentication with access_key/secret_key
+   - Endpoints: `api.ecoflow.com/iot-open/sign/device/...`
 
-### Metric Naming
+3. **Worker** (`ecoflow/worker.py`): Polling loop that collects metrics
+   - Depends on abstract `EcoflowApiClient`
+   - Dynamically creates Prometheus metrics from device data
 
-- Prefix: `ecoflow_` (configurable via `METRICTS_PREFIX`)
-- camelCase converted to snake_case
-- Array indices become labels: `battery[0]` → `ecoflow_battery{index_0="0"}`
-- All metrics include labels: `device`, `device_name`, `product_name`
+4. **EcoflowMetric** (`ecoflow/metrics/prometheus.py`): Prometheus metric wrapper
+   - Converts camelCase to snake_case
+   - Handles nested structures and array indices as labels
+
+### Adding MQTT Support (Future)
+
+Create `ecoflow/api/mqtt.py` implementing `EcoflowApiClient`:
+- Authenticate with email/password via `api.ecoflow.com/auth/login`
+- Connect to `mqtt.ecoflow.com:8883` (TLS)
+- Subscribe to `/app/device/property/{DEVICE_SN}`
+- Cache device metrics from MQTT messages
+- Update `create_client()` factory to detect MQTT credentials
 
 ## Environment Variables
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | ECOFLOW_DEVICE_SN | - | Yes | Device serial number |
-| ECOFLOW_ACCESS_KEY | - | Yes | API access key |
-| ECOFLOW_SECRET_KEY | - | Yes | API secret key |
+| ECOFLOW_ACCESS_KEY | - | Yes* | REST API access key |
+| ECOFLOW_SECRET_KEY | - | Yes* | REST API secret key |
 | EXPORTER_PORT | 9090 | No | Prometheus metrics port |
 | COLLECTING_INTERVAL | 10 | No | Seconds between collections |
-| RETRY_TIMEOUT | 30 | No | Retry delay on API errors |
+| RETRY_TIMEOUT | 30 | No | Retry delay on errors |
 | ESTABLISH_ATTEMPTS | 5 | No | Max connection attempts |
-| METRICTS_PREFIX | ecoflow | No | Metric name prefix |
+| METRICS_PREFIX | ecoflow | No | Metric name prefix |
 | LOG_LEVEL | INFO | No | DEBUG/INFO/WARNING/ERROR |
 | ECOFLOW_DEVICE_NAME | - | No | Override device name |
 
-## Dependencies
-
-- `prometheus-client>=0.20.0` - Prometheus metrics library
-- `requests>=2.32.3` - HTTP client
-- `inflection` - camelCase to snake_case conversion
-
-## Code Patterns
-
-- Single-file architecture with all classes in `ecoflow_prometheus.py`
-- Metrics pool pattern to avoid duplicate metric registration
-- Recursive metric processing for nested API responses
-- Graceful degradation when device is offline (metrics cleared)
-- Signal handling for container graceful shutdown (SIGTERM)
+*Required for REST API. Future MQTT will use ECOFLOW_USERNAME/PASSWORD instead.
