@@ -17,6 +17,9 @@ from .models import DeviceInfo, EcoflowApiException
 ECOFLOW_API_HOST = os.getenv("ECOFLOW_API_HOST", "api.ecoflow.com")
 MQTT_TIMEOUT = int(os.getenv("MQTT_TIMEOUT", "60"))
 HTTP_TIMEOUT = 30  # seconds
+IDLE_CHECK_INTERVAL = 30  # seconds between idle checks
+MQTT_KEEPALIVE = 60  # seconds
+MAX_RECONNECT_DELAY = 300  # max 5 minutes between reconnect attempts
 
 
 class RepeatTimer(Timer):
@@ -146,9 +149,14 @@ class MqttConnection:
         self.last_message_time: float | None = None
         self.client: mqtt.Client | None = None
         self._connected = Event()
+        self._subscribed = Event()
 
     def connect(self) -> None:
         """Establish MQTT connection."""
+        # Clear state before connecting
+        self._connected.clear()
+        self._subscribed.clear()
+
         if self.client:
             self.client.loop_stop()
             self.client.disconnect()
@@ -162,13 +170,17 @@ class MqttConnection:
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
+        self.client.on_subscribe = self._on_subscribe
+
+        # Enable automatic reconnection with backoff
+        self.client.reconnect_delay_set(min_delay=1, max_delay=MAX_RECONNECT_DELAY)
 
         log.info(
             "Connecting to MQTT broker %s:%d",
             self.auth.mqtt_url,
             self.auth.mqtt_port,
         )
-        self.client.connect(self.auth.mqtt_url, self.auth.mqtt_port)
+        self.client.connect(self.auth.mqtt_url, self.auth.mqtt_port, keepalive=MQTT_KEEPALIVE)
         self.client.loop_start()
 
     def disconnect(self) -> None:
@@ -177,6 +189,7 @@ class MqttConnection:
             self.client.loop_stop()
             self.client.disconnect()
             self._connected.clear()
+            self._subscribed.clear()
 
     def is_connected(self) -> bool:
         """Check if MQTT is connected."""
@@ -185,6 +198,10 @@ class MqttConnection:
     def wait_connected(self, timeout: float) -> bool:
         """Wait for connection with timeout. Returns True if connected."""
         return self._connected.wait(timeout)
+
+    def wait_subscribed(self, timeout: float) -> bool:
+        """Wait for subscription confirmation. Returns True if subscribed."""
+        return self._subscribed.wait(timeout)
 
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT connection callback."""
@@ -201,8 +218,14 @@ class MqttConnection:
     def _on_disconnect(self, client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT disconnection callback."""
         self._connected.clear()
+        self._subscribed.clear()
         if reason_code != 0:
             log.error("Unexpected MQTT disconnection: %s", reason_code)
+
+    def _on_subscribe(self, client, userdata, mid, reason_codes, properties) -> None:
+        """Handle MQTT subscription callback."""
+        self._subscribed.set()
+        log.debug("Subscription confirmed (mid=%s)", mid)
 
     def _on_message(self, client, userdata, message) -> None:
         """Handle incoming MQTT message."""
@@ -245,6 +268,7 @@ class MqttApiClient(EcoflowApiClient):
         self._last_update: float | None = None
         self._mqtt: MqttConnection | None = None
         self._idle_timer: RepeatTimer | None = None
+        self._reconnect_delay: int = IDLE_CHECK_INTERVAL  # Exponential backoff
 
         # Initialize generic protobuf decoder for all devices
         from ..proto.decoder import get_decoder
@@ -263,14 +287,21 @@ class MqttApiClient(EcoflowApiClient):
         )
         self._mqtt.connect()
 
-        # Start idle reconnection timer
-        self._idle_timer = RepeatTimer(10, self._check_idle)
-        self._idle_timer.daemon = True
-        self._idle_timer.start()
-
         # Wait for initial connection using Event (efficient, no busy-wait)
         if not self._mqtt.wait_connected(timeout=10):
             raise EcoflowApiException("Failed to connect to MQTT broker")
+
+        # Wait for subscription confirmation
+        if not self._mqtt.wait_subscribed(timeout=5):
+            log.warning("Subscription confirmation not received, proceeding anyway")
+
+        # Start idle reconnection timer (check every 30s, not 10s)
+        self._idle_timer = RepeatTimer(IDLE_CHECK_INTERVAL, self._check_idle)
+        self._idle_timer.daemon = True
+        self._idle_timer.start()
+
+        # Reset reconnect delay on successful connection
+        self._reconnect_delay = IDLE_CHECK_INTERVAL
 
         log.info("Connected to EcoFlow MQTT broker")
 
@@ -365,7 +396,7 @@ class MqttApiClient(EcoflowApiClient):
             self._reconnect()
 
     def _reconnect(self) -> None:
-        """Reconnect to MQTT broker with timeout protection."""
+        """Reconnect to MQTT broker with timeout protection and exponential backoff."""
         if not self._mqtt:
             return
 
@@ -378,12 +409,22 @@ class MqttApiClient(EcoflowApiClient):
 
         reconnect_thread = Thread(target=do_reconnect, daemon=True)
         reconnect_thread.start()
-        reconnect_thread.join(timeout=60)
+        reconnect_thread.join(timeout=30)
 
         if reconnect_thread.is_alive():
             log.error("MQTT reconnection timed out")
+            self._apply_backoff()
         elif self._mqtt.is_connected():
             log.info("MQTT reconnection successful")
             self._mqtt.last_message_time = time.time()
+            self._reconnect_delay = IDLE_CHECK_INTERVAL  # Reset backoff
         else:
             log.error("MQTT reconnection failed")
+            self._apply_backoff()
+
+    def _apply_backoff(self) -> None:
+        """Apply exponential backoff for reconnection failures."""
+        if self._mqtt:
+            self._mqtt.last_message_time = time.time()  # Prevent immediate retry
+        self._reconnect_delay = min(self._reconnect_delay * 2, MAX_RECONNECT_DELAY)
+        log.info("Next reconnect attempt in %d seconds", self._reconnect_delay)
