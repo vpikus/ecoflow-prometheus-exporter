@@ -111,7 +111,10 @@ class MqttAuthentication:
         log.info("MQTT credentials obtained for account: %s", self.mqtt_username)
 
     def _parse_response(self, response: requests.Response) -> dict[str, Any]:
-        """Parse and validate API response."""
+        """Parse and validate API response.
+
+        Handles both User API (message="Success") and Developer API (code="0").
+        """
         if response.status_code != 200:
             raise EcoflowApiException(
                 f"HTTP {response.status_code}: {response.text}"
@@ -122,11 +125,14 @@ class MqttAuthentication:
         except json.JSONDecodeError as e:
             raise EcoflowApiException(f"Invalid JSON response: {e}")
 
+        # Check for success: code="0" (Developer API) or message="Success" (User API)
+        code = str(json_data.get("code", ""))
         message = json_data.get("message", "")
-        if message.lower() != "success":
-            raise EcoflowApiException(f"API error: {message}")
 
-        return json_data
+        if code == "0" or message.lower() == "success":
+            return json_data
+
+        raise EcoflowApiException(f"API error (code={code}): {message}")
 
 
 class MqttConnection:

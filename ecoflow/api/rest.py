@@ -128,8 +128,10 @@ class RestApiClient(EcoflowApiClient):
             }
         )
 
+        sign_message = urllib.parse.urlencode(sign_params)
+
         headers = {
-            "sign": self.auth.build_signature(urllib.parse.urlencode(sign_params)),
+            "sign": self.auth.build_signature(sign_message),
         }
         headers.update(sign_params)
 
@@ -155,10 +157,16 @@ class RestApiClient(EcoflowApiClient):
         return self._unwrap_response(json_data)
 
     def _unwrap_response(self, response: dict[str, Any]) -> Any:
-        """Extract data from API response or raise exception."""
-        if str(response.get("message", "")).lower() == "success":
+        """Extract data from API response or raise exception.
+
+        EcoFlow API returns code "0" for success.
+        """
+        code = str(response.get("code", ""))
+        if code == "0":
             return response.get("data", {})
-        raise EcoflowApiException(f"API error: {response.get('message')}")
+
+        message = response.get("message", "Unknown error")
+        raise EcoflowApiException(f"API error (code={code}): {message}")
 
     def _parse_device(self, data: dict[str, Any]) -> DeviceInfo:
         """Parse device data from API response."""
