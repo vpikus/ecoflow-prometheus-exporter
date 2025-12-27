@@ -14,12 +14,13 @@ import requests
 from .base import EcoflowApiClient
 from .models import DeviceInfo, EcoflowApiException
 
+# Configuration via environment variables
 ECOFLOW_API_HOST = os.getenv("ECOFLOW_API_HOST", "api.ecoflow.com")
 MQTT_TIMEOUT = int(os.getenv("MQTT_TIMEOUT", "60"))
-HTTP_TIMEOUT = 30  # seconds
-IDLE_CHECK_INTERVAL = 30  # seconds between idle checks
-MQTT_KEEPALIVE = 60  # seconds
-MAX_RECONNECT_DELAY = 300  # max 5 minutes between reconnect attempts
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "30"))
+IDLE_CHECK_INTERVAL = int(os.getenv("IDLE_CHECK_INTERVAL", "30"))
+MQTT_KEEPALIVE = int(os.getenv("MQTT_KEEPALIVE", "60"))
+MAX_RECONNECT_DELAY = int(os.getenv("MAX_RECONNECT_DELAY", "300"))
 
 
 class RepeatTimer(Timer):

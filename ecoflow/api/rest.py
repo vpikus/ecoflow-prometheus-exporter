@@ -1,19 +1,28 @@
 import hashlib
 import hmac
+import json
 import logging as log
+import os
 import secrets
 import time
 import urllib.parse
 from typing import Any
 
 import requests
-
-HTTP_TIMEOUT = 30  # seconds
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .base import EcoflowApiClient
 from .models import DeviceInfo, EcoflowApiException
 
-HOST = "https://api.ecoflow.com"
+# Configuration via environment variables
+ECOFLOW_API_HOST = os.getenv("ECOFLOW_API_HOST", "api-e.ecoflow.com")
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "30"))
+HTTP_RETRIES = int(os.getenv("HTTP_RETRIES", "3"))
+HTTP_BACKOFF_FACTOR = float(os.getenv("HTTP_BACKOFF_FACTOR", "0.5"))
+
+# API endpoints
+HOST = f"https://{ECOFLOW_API_HOST}"
 DEVICE_LIST_URL = HOST + "/iot-open/sign/device/list"
 GET_ALL_QUOTA_URL = HOST + "/iot-open/sign/device/quota/all"
 
@@ -28,30 +37,71 @@ class RestApiAuthentication:
     def build_signature(self, message: str) -> str:
         """Build HMAC-SHA256 signature for API request."""
         log.debug("Message: %s", message)
-        signature = hmac.new(
-            self.secret_key.encode(), message.encode(), hashlib.sha256
-        ).hexdigest()
+        signature = hmac.new(self.secret_key.encode(), message.encode(), hashlib.sha256).hexdigest()
         return signature
 
 
+def _create_session() -> requests.Session:
+    """Create a requests session with retry logic and connection pooling."""
+    session = requests.Session()
+
+    # Configure retry strategy with exponential backoff
+    retry_strategy = Retry(
+        total=HTTP_RETRIES,
+        backoff_factor=HTTP_BACKOFF_FACTOR,
+        status_forcelist=[429, 500, 502, 503, 504],  # Retry on these status codes
+        allowed_methods=["GET", "POST"],
+        raise_on_status=False,  # Don't raise, let us handle it
+    )
+
+    adapter = HTTPAdapter(
+        max_retries=retry_strategy,
+        pool_connections=10,
+        pool_maxsize=10,
+    )
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+    return session
+
+
 class RestApiClient(EcoflowApiClient):
-    """REST API client using developer tokens (access_key/secret_key)."""
+    """REST API client using developer tokens (access_key/secret_key).
+
+    Features:
+    - Connection pooling for efficient HTTP requests
+    - Automatic retry with exponential backoff on transient failures
+    - Configurable timeouts via environment variables
+    """
 
     def __init__(self, access_key: str, secret_key: str):
         self.auth = RestApiAuthentication(access_key, secret_key)
         self._devices_cache: list[DeviceInfo] | None = None
+        self._devices_cache_time: float | None = None
+        self._session: requests.Session | None = None
 
     def connect(self) -> None:
         """Validate credentials by fetching device list."""
+        # Create session with connection pooling
+        self._session = _create_session()
+
         self._devices_cache = None
+        self._devices_cache_time = None
         devices = self.get_devices()
         log.info("Connected to EcoFlow API. Found %d device(s)", len(devices))
+
+    def disconnect(self) -> None:
+        """Close the session and release resources."""
+        if self._session:
+            self._session.close()
+            self._session = None
 
     def get_devices(self) -> list[DeviceInfo]:
         """Get list of registered devices."""
         data = self._execute_request("GET", DEVICE_LIST_URL, {})
         devices = [self._parse_device(d) for d in data]
         self._devices_cache = devices
+        self._devices_cache_time = time.time()
         return devices
 
     def get_device(self, device_sn: str) -> DeviceInfo | None:
@@ -63,10 +113,12 @@ class RestApiClient(EcoflowApiClient):
         """Get device statistics/metrics."""
         return self._execute_request("GET", GET_ALL_QUOTA_URL, {"sn": device_sn})
 
-    def _execute_request(
-        self, method: str, url: str, params: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Execute signed API request."""
+    def _execute_request(self, method: str, url: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Execute signed API request with automatic retry."""
+        # Ensure session exists
+        if not self._session:
+            self._session = _create_session()
+
         sign_params = dict(params)
         sign_params.update(
             {
@@ -82,15 +134,21 @@ class RestApiClient(EcoflowApiClient):
         headers.update(sign_params)
 
         try:
-            response = requests.request(
-                method, url, headers=headers, params=params, timeout=HTTP_TIMEOUT
-            )
-            response.raise_for_status()
-            json_data = response.json()
+            response = self._session.request(method, url, headers=headers, params=params, timeout=HTTP_TIMEOUT)
         except requests.Timeout:
-            raise EcoflowApiException(f"Request to {url} timed out")
+            raise EcoflowApiException(f"Request to {url} timed out after {HTTP_TIMEOUT}s")
         except requests.RequestException as e:
             raise EcoflowApiException(f"Request failed: {e}")
+
+        # Check for HTTP errors
+        if response.status_code >= 400:
+            raise EcoflowApiException(f"HTTP {response.status_code}: {response.text[:200]}")
+
+        # Parse JSON response
+        try:
+            json_data = response.json()
+        except json.JSONDecodeError as e:
+            raise EcoflowApiException(f"Invalid JSON response: {e}")
 
         log.debug("Payload: %s", json_data)
 

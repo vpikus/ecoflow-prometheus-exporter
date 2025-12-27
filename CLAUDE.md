@@ -74,6 +74,8 @@ ecoflow-prometheus-exporter/
 2. **RestApiClient** (`ecoflow/api/rest.py`): REST API implementation
    - Uses HMAC-SHA256 authentication with access_key/secret_key
    - Polling-based: fetches data on each `get_device_quota()` call
+   - Connection pooling with `requests.Session` for efficiency
+   - Automatic retry with exponential backoff on transient failures
    - Endpoints: `api.ecoflow.com/iot-open/sign/device/...`
 
 3. **MqttApiClient** (`ecoflow/api/mqtt.py`): Public MQTT implementation
@@ -85,11 +87,12 @@ ecoflow-prometheus-exporter/
 4. **DeviceApiClient** (`ecoflow/api/device.py`): Private MQTT implementation
    - Same auth as MQTT, but uses request/reply pattern
    - Actively requests quota data (works with all EcoFlow devices)
+   - Smart quota requests: skips if push data received recently (reduces server load)
+   - Exponential backoff on reconnection failures
    - Topics:
      - `/app/device/property/{device_sn}` - receives push data
      - `/app/{user_id}/{device_sn}/thing/property/get` - sends requests
      - `/app/{user_id}/{device_sn}/thing/property/get_reply` - receives responses
-   - Sends `latestQuotas` request every QUOTA_REQUEST_INTERVAL seconds
 
 5. **create_client()** (`ecoflow/api/__init__.py`): Factory function
    - Detects credentials from environment variables
@@ -98,24 +101,52 @@ ecoflow-prometheus-exporter/
 
 ## Environment Variables
 
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| ECOFLOW_DEVICE_SN | Device serial number |
+
+### Authentication (choose one set)
+
+| Variable | Description |
+|----------|-------------|
+| ECOFLOW_ACCESS_KEY | REST API access key (developer tokens) |
+| ECOFLOW_SECRET_KEY | REST API secret key (developer tokens) |
+| ECOFLOW_ACCOUNT_USER | MQTT/Device API: EcoFlow account email |
+| ECOFLOW_ACCOUNT_PASSWORD | MQTT/Device API: EcoFlow account password |
+
+### General Configuration
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| ECOFLOW_DEVICE_SN | - | Device serial number (required) |
-| ECOFLOW_ACCESS_KEY | - | REST API access key |
-| ECOFLOW_SECRET_KEY | - | REST API secret key |
-| ECOFLOW_ACCOUNT_USER | - | MQTT/Device: EcoFlow account email |
-| ECOFLOW_ACCOUNT_PASSWORD | - | MQTT/Device: EcoFlow account password |
-| ECOFLOW_API_TYPE | mqtt | API type for user credentials: "mqtt" or "device" |
+| ECOFLOW_API_TYPE | mqtt | API type: "mqtt" or "device" |
 | ECOFLOW_DEVICE_NAME | - | Override device name in metrics |
 | ECOFLOW_API_HOST | api.ecoflow.com | API host for authentication |
 | EXPORTER_PORT | 9090 | Prometheus metrics port |
-| COLLECTING_INTERVAL | 10 | Seconds between Worker collections |
-| QUOTA_REQUEST_INTERVAL | 30 | Device API: seconds between quota requests |
-| RETRY_TIMEOUT | 30 | Retry delay on errors |
-| ESTABLISH_ATTEMPTS | 5 | Max connection attempts |
-| MQTT_TIMEOUT | 60 | MQTT idle timeout before reconnect |
 | METRICS_PREFIX | ecoflow | Metric name prefix |
 | LOG_LEVEL | INFO | DEBUG/INFO/WARNING/ERROR |
+
+### Timing Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| COLLECTING_INTERVAL | 10 | Seconds between Worker collections |
+| QUOTA_REQUEST_INTERVAL | 30 | Device API: seconds between quota requests (skipped if push data received) |
+| RETRY_TIMEOUT | 30 | Retry delay on Worker errors |
+| ESTABLISH_ATTEMPTS | 5 | Max connection attempts on startup |
+
+### Network Timeouts
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| HTTP_TIMEOUT | 30 | HTTP request timeout in seconds |
+| HTTP_RETRIES | 3 | Number of HTTP retry attempts (REST API) |
+| HTTP_BACKOFF_FACTOR | 0.5 | Exponential backoff multiplier for retries |
+| MQTT_TIMEOUT | 60 | MQTT idle timeout before reconnect |
+| MQTT_KEEPALIVE | 60 | MQTT keepalive interval in seconds |
+| IDLE_CHECK_INTERVAL | 30 | Seconds between idle connection checks |
+| MAX_RECONNECT_DELAY | 300 | Maximum reconnect delay (exponential backoff cap) |
 
 ## API Comparison
 
