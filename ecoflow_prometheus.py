@@ -92,8 +92,11 @@ def main() -> None:
     try:
         worker.run()
     except KeyboardInterrupt:
+        pass
+    finally:
+        log.info("Shutting down...")
+        client.disconnect()
         log.info("Exiting...")
-        sys.exit(0)
 
 
 if __name__ == "__main__":

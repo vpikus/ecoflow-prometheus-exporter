@@ -15,10 +15,10 @@ Topics:
 import json
 import logging as log
 import os
-import random
+import secrets
 import ssl
 import time
-from threading import Lock
+from threading import Event, Lock
 from typing import Any
 
 import paho.mqtt.client as mqtt
@@ -33,7 +33,7 @@ QUOTA_REQUEST_INTERVAL = int(os.getenv("QUOTA_REQUEST_INTERVAL", "30"))
 
 def _gen_request_id() -> int:
     """Generate random request ID for MQTT messages."""
-    return 999900000 + random.randint(10000, 99999)
+    return 999900000 + secrets.randbelow(90000) + 10000
 
 
 class DeviceApiClient(EcoflowApiClient):
@@ -63,7 +63,7 @@ class DeviceApiClient(EcoflowApiClient):
         self._cache_lock = Lock()
         self._last_update: float | None = None
         self._client: mqtt.Client | None = None
-        self._connected = False
+        self._connected = Event()
         self._idle_timer: RepeatTimer | None = None
         self._quota_timer: RepeatTimer | None = None
         self._last_message_time: float | None = None
@@ -90,13 +90,8 @@ class DeviceApiClient(EcoflowApiClient):
 
         self._connect_mqtt()
 
-        # Wait for initial connection
-        timeout = 10
-        start = time.time()
-        while not self._connected and time.time() - start < timeout:
-            time.sleep(0.1)
-
-        if not self._connected:
+        # Wait for initial connection using Event (efficient, no busy-wait)
+        if not self._connected.wait(timeout=10):
             raise EcoflowApiException("Failed to connect to MQTT broker")
 
         # Start idle reconnection timer
@@ -114,6 +109,20 @@ class DeviceApiClient(EcoflowApiClient):
         self._request_quota()
 
         log.info("Connected to EcoFlow Device API (private MQTT)")
+
+    def disconnect(self) -> None:
+        """Disconnect from MQTT broker and stop timers."""
+        if self._quota_timer:
+            self._quota_timer.cancel()
+            self._quota_timer = None
+        if self._idle_timer:
+            self._idle_timer.cancel()
+            self._idle_timer = None
+        if self._client:
+            self._client.loop_stop()
+            self._client.disconnect()
+            self._client = None
+        self._connected.clear()
 
     def get_devices(self) -> list[DeviceInfo]:
         """Get list of devices (returns configured device only)."""
@@ -135,7 +144,7 @@ class DeviceApiClient(EcoflowApiClient):
 
     def _get_device_info(self) -> DeviceInfo:
         """Build DeviceInfo from available data."""
-        online = self._connected
+        online = self._connected.is_set()
         if self._last_update:
             age = time.time() - self._last_update
             online = online and age < MQTT_TIMEOUT
@@ -175,7 +184,7 @@ class DeviceApiClient(EcoflowApiClient):
         self._last_message_time = time.time()
 
         if str(reason_code) == "Success":
-            self._connected = True
+            self._connected.set()
             # Subscribe to both data topic and get_reply topic
             topics = [
                 (self._data_topic, 1),
@@ -184,12 +193,12 @@ class DeviceApiClient(EcoflowApiClient):
             self._client.subscribe(topics)
             log.info("Subscribed to Device API topics: %s", [t[0] for t in topics])
         else:
-            self._connected = False
+            self._connected.clear()
             log.error("MQTT connection failed: %s", reason_code)
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT disconnection callback."""
-        self._connected = False
+        self._connected.clear()
         if reason_code != 0:
             log.error("Unexpected MQTT disconnection: %s", reason_code)
 
@@ -268,7 +277,7 @@ class DeviceApiClient(EcoflowApiClient):
 
     def _request_quota(self) -> None:
         """Send quota request to device."""
-        if not self._connected or not self._client:
+        if not self._connected.is_set() or not self._client:
             log.debug("Not connected, skipping quota request")
             return
 

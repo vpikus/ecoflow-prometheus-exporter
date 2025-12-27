@@ -5,9 +5,7 @@ import os
 import ssl
 import time
 import uuid
-from multiprocessing import Process
-from queue import Empty, Queue
-from threading import Lock, Timer
+from threading import Event, Lock, Thread, Timer
 from typing import Any, Callable
 
 import paho.mqtt.client as mqtt
@@ -18,6 +16,7 @@ from .models import DeviceInfo, EcoflowApiException
 
 ECOFLOW_API_HOST = os.getenv("ECOFLOW_API_HOST", "api.ecoflow.com")
 MQTT_TIMEOUT = int(os.getenv("MQTT_TIMEOUT", "60"))
+HTTP_TIMEOUT = 30  # seconds
 
 
 class RepeatTimer(Timer):
@@ -63,7 +62,12 @@ class MqttAuthentication:
         }
 
         log.info("Logging in to EcoFlow API at %s", url)
-        response = requests.post(url, json=data, headers=headers)
+        try:
+            response = requests.post(url, json=data, headers=headers, timeout=HTTP_TIMEOUT)
+        except requests.Timeout:
+            raise EcoflowApiException(f"Login request to {url} timed out")
+        except requests.RequestException as e:
+            raise EcoflowApiException(f"Login request failed: {e}")
         json_response = self._parse_response(response)
 
         try:
@@ -83,7 +87,12 @@ class MqttAuthentication:
         params = {"userId": user_id}
 
         log.info("Requesting MQTT credentials from %s", url)
-        response = requests.get(url, params=params, headers=headers)
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=HTTP_TIMEOUT)
+        except requests.Timeout:
+            raise EcoflowApiException(f"MQTT credentials request to {url} timed out")
+        except requests.RequestException as e:
+            raise EcoflowApiException(f"MQTT credentials request failed: {e}")
         json_response = self._parse_response(response)
 
         try:
@@ -136,7 +145,7 @@ class MqttConnection:
         self.topic = f"/app/device/property/{device_sn}"
         self.last_message_time: float | None = None
         self.client: mqtt.Client | None = None
-        self._connected = False
+        self._connected = Event()
 
     def connect(self) -> None:
         """Establish MQTT connection."""
@@ -167,11 +176,15 @@ class MqttConnection:
         if self.client:
             self.client.loop_stop()
             self.client.disconnect()
-            self._connected = False
+            self._connected.clear()
 
     def is_connected(self) -> bool:
         """Check if MQTT is connected."""
-        return self._connected
+        return self._connected.is_set()
+
+    def wait_connected(self, timeout: float) -> bool:
+        """Wait for connection with timeout. Returns True if connected."""
+        return self._connected.wait(timeout)
 
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT connection callback."""
@@ -179,15 +192,15 @@ class MqttConnection:
 
         if str(reason_code) == "Success":
             self.client.subscribe(self.topic)
-            self._connected = True
+            self._connected.set()
             log.info("Subscribed to MQTT topic %s", self.topic)
         else:
-            self._connected = False
+            self._connected.clear()
             log.error("MQTT connection failed: %s", reason_code)
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT disconnection callback."""
-        self._connected = False
+        self._connected.clear()
         if reason_code != 0:
             log.error("Unexpected MQTT disconnection: %s", reason_code)
 
@@ -255,16 +268,20 @@ class MqttApiClient(EcoflowApiClient):
         self._idle_timer.daemon = True
         self._idle_timer.start()
 
-        # Wait for initial connection
-        timeout = 10
-        start = time.time()
-        while not self._mqtt.is_connected() and time.time() - start < timeout:
-            time.sleep(0.1)
-
-        if not self._mqtt.is_connected():
+        # Wait for initial connection using Event (efficient, no busy-wait)
+        if not self._mqtt.wait_connected(timeout=10):
             raise EcoflowApiException("Failed to connect to MQTT broker")
 
         log.info("Connected to EcoFlow MQTT broker")
+
+    def disconnect(self) -> None:
+        """Disconnect from MQTT broker and stop timers."""
+        if self._idle_timer:
+            self._idle_timer.cancel()
+            self._idle_timer = None
+        if self._mqtt:
+            self._mqtt.disconnect()
+            self._mqtt = None
 
     def get_devices(self) -> list[DeviceInfo]:
         """Get list of devices (returns configured device only).
@@ -349,15 +366,24 @@ class MqttApiClient(EcoflowApiClient):
 
     def _reconnect(self) -> None:
         """Reconnect to MQTT broker with timeout protection."""
-        # Use subprocess to prevent hanging
-        connect_process = Process(target=self._mqtt.connect)
-        connect_process.start()
-        connect_process.join(timeout=60)
-        connect_process.terminate()
+        if not self._mqtt:
+            return
 
-        if connect_process.exitcode == 0:
+        # Use thread with timeout for reconnection
+        def do_reconnect():
+            try:
+                self._mqtt.connect()
+            except Exception as e:
+                log.error("MQTT reconnection error: %s", e)
+
+        reconnect_thread = Thread(target=do_reconnect, daemon=True)
+        reconnect_thread.start()
+        reconnect_thread.join(timeout=60)
+
+        if reconnect_thread.is_alive():
+            log.error("MQTT reconnection timed out")
+        elif self._mqtt.is_connected():
             log.info("MQTT reconnection successful")
-            if self._mqtt:
-                self._mqtt.last_message_time = time.time()
+            self._mqtt.last_message_time = time.time()
         else:
-            log.error("MQTT reconnection failed or timed out")
+            log.error("MQTT reconnection failed")

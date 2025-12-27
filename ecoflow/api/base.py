@@ -64,3 +64,11 @@ class EcoflowApiClient(ABC):
             EcoflowApiException: If request fails.
         """
         pass
+
+    def disconnect(self) -> None:
+        """Disconnect from EcoFlow service and release resources.
+
+        Default implementation does nothing (for stateless clients like REST).
+        MQTT-based clients should override to stop timers and close connections.
+        """
+        pass

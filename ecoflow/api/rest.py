@@ -1,12 +1,14 @@
 import hashlib
 import hmac
 import logging as log
-import random
+import secrets
 import time
 import urllib.parse
 from typing import Any
 
 import requests
+
+HTTP_TIMEOUT = 30  # seconds
 
 from .base import EcoflowApiClient
 from .models import DeviceInfo, EcoflowApiException
@@ -69,7 +71,7 @@ class RestApiClient(EcoflowApiClient):
         sign_params.update(
             {
                 "accessKey": self.auth.access_key,
-                "nonce": f"{random.randint(100000, 999999)}",
+                "nonce": f"{secrets.randbelow(900000) + 100000}",
                 "timestamp": f"{int(time.time() * 1000)}",
             }
         )
@@ -79,8 +81,17 @@ class RestApiClient(EcoflowApiClient):
         }
         headers.update(sign_params)
 
-        response = requests.request(method, url, headers=headers, params=params)
-        json_data = response.json()
+        try:
+            response = requests.request(
+                method, url, headers=headers, params=params, timeout=HTTP_TIMEOUT
+            )
+            response.raise_for_status()
+            json_data = response.json()
+        except requests.Timeout:
+            raise EcoflowApiException(f"Request to {url} timed out")
+        except requests.RequestException as e:
+            raise EcoflowApiException(f"Request failed: {e}")
+
         log.debug("Payload: %s", json_data)
 
         return self._unwrap_response(json_data)
