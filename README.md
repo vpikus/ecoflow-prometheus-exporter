@@ -1,1 +1,259 @@
-# ecoflow-prometheus-exporter
+# EcoFlow Prometheus Exporter
+
+Prometheus metrics exporter for EcoFlow portable power stations and solar generators.
+
+> ⚠️ **Disclaimer:** This is a personal, open-source project created for learning and experimentation. It is not intended to support the full range of EcoFlow features
+> The application works in read-only mode and does not send, modify, or push any configuration or data to the EcoFlow API.
+> This project is not affiliated with or endorsed by EcoFlow in any way. It is provided as-is, with no guarantees or warranties.
+
+## Features
+
+- Exports device metrics to Prometheus format
+- Supports three API backends:
+  - **REST API** - Developer tokens (polling-based)
+  - **MQTT** - User credentials (push-based, passive)
+  - **Device API** - User credentials (request/reply, works with all devices) - **Recommended**
+- Automatic retry with exponential backoff
+- Connection pooling for REST API
+- Supports both JSON and Protobuf message formats
+
+## Requirements
+
+- Python 3.10+
+- EcoFlow account with registered devices
+- Either:
+  - Developer API credentials (accessKey/secretKey) from [EcoFlow IoT Platform](https://developer.ecoflow.com/)
+  - Or EcoFlow app account credentials (email/password)
+
+## Installation
+
+### Using pip
+
+```bash
+pip install -r requirements.txt
+```
+
+### Using Docker
+
+```bash
+docker build -t ecoflow-exporter .
+```
+
+## Quick Start
+
+### Option 1: Device API (Recommended)
+
+Works with all EcoFlow devices using your app account:
+
+```bash
+export ECOFLOW_DEVICE_SN="YOUR_DEVICE_SERIAL_NUMBER"
+export ECOFLOW_ACCOUNT_USER="your-email@example.com"
+export ECOFLOW_ACCOUNT_PASSWORD="your-password"
+export ECOFLOW_API_TYPE="device"
+
+python ecoflow_prometheus.py
+```
+
+### Option 2: MQTT API (Passive)
+
+Push-based data collection using your app account:
+
+```bash
+export ECOFLOW_DEVICE_SN="YOUR_DEVICE_SERIAL_NUMBER"
+export ECOFLOW_ACCOUNT_USER="your-email@example.com"
+export ECOFLOW_ACCOUNT_PASSWORD="your-password"
+export ECOFLOW_API_TYPE="mqtt"
+
+python ecoflow_prometheus.py
+```
+
+### Option 3: REST API (Developer)
+
+Requires developer API credentials:
+
+```bash
+export ECOFLOW_DEVICE_SN="YOUR_DEVICE_SERIAL_NUMBER"
+export ECOFLOW_ACCESS_KEY="your-access-key"
+export ECOFLOW_SECRET_KEY="your-secret-key"
+
+python ecoflow_prometheus.py
+```
+
+### Using Docker
+
+```bash
+docker run -d \
+  -p 9090:9090 \
+  -e ECOFLOW_DEVICE_SN="YOUR_DEVICE_SN" \
+  -e ECOFLOW_ACCOUNT_USER="your-email@example.com" \
+  -e ECOFLOW_ACCOUNT_PASSWORD="your-password" \
+  -e ECOFLOW_API_TYPE="device" \
+  ecoflow-exporter
+```
+
+### Using Docker Compose
+
+Create a `.env` file:
+
+```bash
+ECOFLOW_DEVICE_SN=YOUR_DEVICE_SERIAL_NUMBER
+ECOFLOW_ACCOUNT_USER=your-email@example.com
+ECOFLOW_ACCOUNT_PASSWORD=your-password
+```
+
+Create `docker-compose.yml`:
+
+```yaml
+services:
+  ecoflow_exporter:
+    build: .
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    environment:
+      ECOFLOW_DEVICE_SN: ${ECOFLOW_DEVICE_SN}
+      ECOFLOW_ACCOUNT_USER: ${ECOFLOW_ACCOUNT_USER}
+      ECOFLOW_ACCOUNT_PASSWORD: ${ECOFLOW_ACCOUNT_PASSWORD}
+      ECOFLOW_API_TYPE: device
+```
+
+Run:
+
+```bash
+docker-compose up -d
+```
+
+## Configuration
+
+### Required Variables
+
+| Variable               | Description                                    |
+|------------------------|------------------------------------------------|
+| `ECOFLOW_DEVICE_SN`    | Device serial number (found in EcoFlow app)    |
+
+### Authentication (choose one)
+
+**Developer API:**
+
+| Variable                | Description                  |
+|-------------------------|------------------------------|
+| `ECOFLOW_ACCESS_KEY`    | Developer API access key     |
+| `ECOFLOW_SECRET_KEY`    | Developer API secret key     |
+
+**User API (MQTT/Device):**
+
+| Variable                      | Description                  |
+|-------------------------------|------------------------------|
+| `ECOFLOW_ACCOUNT_USER`        | EcoFlow account email        |
+| `ECOFLOW_ACCOUNT_PASSWORD`    | EcoFlow account password     |
+
+### General Configuration
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `ECOFLOW_API_TYPE` | `mqtt` | API type: `mqtt` or `device` |
+| `ECOFLOW_DEVICE_NAME` | — | Override device name in metrics |
+| `ECOFLOW_API_HOST` | `api-e.ecoflow.com` | API host |
+| `EXPORTER_PORT` | `9090` | Prometheus metrics port |
+| `METRICS_PREFIX` | `ecoflow` | Metric name prefix |
+| `LOG_LEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+
+### Timing Configuration
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `COLLECTING_INTERVAL` | `10` | Seconds between metric collections |
+| `QUOTA_REQUEST_INTERVAL` | `30` | Device API: seconds between quota requests |
+| `RETRY_TIMEOUT` | `30` | Retry delay on errors |
+| `ESTABLISH_ATTEMPTS` | `5` | Max connection attempts on startup |
+
+### Network Timeouts
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `HTTP_TIMEOUT` | `30` | HTTP request timeout (seconds) |
+| `HTTP_RETRIES` | `3` | HTTP retry attempts (REST API) |
+| `HTTP_BACKOFF_FACTOR` | `0.5` | Exponential backoff multiplier |
+| `MQTT_TIMEOUT` | `60` | MQTT idle timeout before reconnect |
+| `MQTT_KEEPALIVE` | `60` | MQTT keepalive interval |
+| `IDLE_CHECK_INTERVAL` | `30` | Idle connection check frequency |
+| `MAX_RECONNECT_DELAY` | `300` | Max reconnect delay (backoff cap) |
+
+## API Comparison
+
+| Feature | REST API | MQTT | Device API |
+| ------- | -------- | ---- | ---------- |
+| Auth | Developer tokens | User credentials | User credentials |
+| Data flow | Polling | Push (passive) | Request/reply |
+| Device discovery | Yes | No | No |
+| Device support | Limited | Limited | **All devices** |
+| Rate limits | API limits | None | None |
+
+**Recommendation:** Use Device API (`ECOFLOW_API_TYPE=device`) for best compatibility.
+
+## Prometheus Configuration
+
+Add to your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'ecoflow'
+    static_configs:
+      - targets: ['localhost:9090']
+```
+
+## Metrics
+
+Metrics are exported with the prefix `ecoflow_` (configurable via `METRICS_PREFIX`).
+
+Example metrics:
+
+```text
+# Device status
+ecoflow_online{device="DCXXX",device_name="My Delta",product_name="Delta 2"} 1
+
+# Battery
+ecoflow_bms_master_soc{device="DCXXX",...} 85
+ecoflow_bms_master_temp{device="DCXXX",...} 28
+
+# Power
+ecoflow_inv_input_watts{device="DCXXX",...} 120
+ecoflow_inv_output_watts{device="DCXXX",...} 450
+
+# And many more device-specific metrics...
+```
+
+## Grafana Dashboard
+
+Import metrics into Grafana to visualize:
+
+- Battery state of charge
+- Input/output power
+- Temperature
+- Charging status
+- Solar input (if applicable)
+
+## Troubleshooting
+
+### "signature is wrong" error (REST API)
+
+Ensure your system clock is synchronized. The API requires accurate timestamps.
+
+### No data received (MQTT/Device API)
+
+1. Check credentials are correct
+2. Verify device is online in the EcoFlow app
+3. Try increasing `LOG_LEVEL` to `DEBUG`
+
+### Connection timeouts
+
+Adjust timeout values:
+
+```bash
+export HTTP_TIMEOUT=60
+export MQTT_TIMEOUT=120
+```
+
+## License
+
+MIT License
