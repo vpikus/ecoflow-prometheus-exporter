@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Iterable, Type, Union
+from collections.abc import Iterable
 
 import inflection
 from prometheus_client import Counter, Gauge, Info
@@ -15,12 +15,12 @@ class EcoflowMetric:
     Converts EcoFlow camelCase keys to Prometheus snake_case format.
     """
 
-    METRICS_POOL: dict[str, Union[Info, Gauge, Counter]] = {}
+    METRICS_POOL: dict[str, Info | Gauge | Counter] = {}
     LABEL_NAMES = ["device", "device_name", "product_name", "device_general_key"]
 
     def __init__(
         self,
-        metric_type: Type[Union[Info, Gauge, Counter]],
+        metric_type: type[Info | Gauge | Counter],
         name: str,
         description: str,
         labelnames: Iterable[str] = (),
@@ -56,7 +56,7 @@ class EcoflowMetric:
         name = pattern.sub("", name)
         return name, labels
 
-    def set(self, value: Union[int, float]) -> None:
+    def set(self, value: int | float) -> None:
         """Set gauge value."""
         self.metric.labels(**self.labels).set(value)
 
@@ -64,7 +64,7 @@ class EcoflowMetric:
         """Set info metric data."""
         self.metric.labels(**self.labels).info(data)
 
-    def inc(self, value: Union[int, float] = 1) -> None:
+    def inc(self, value: int | float = 1) -> None:
         """Increment counter."""
         self.metric.labels(**self.labels).inc(value)
 

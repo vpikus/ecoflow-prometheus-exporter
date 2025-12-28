@@ -71,24 +71,21 @@ def create_client(device_sn: str | None = None) -> EcoflowApiClient:
 
     # Create REST API client
     if has_rest_creds:
+        assert access_key is not None and secret_key is not None
         return RestApiClient(access_key, secret_key)
 
     # Create MQTT or Device API client
     if has_user_creds:
+        assert account_user is not None and account_password is not None
         if not device_sn:
-            raise ValueError(
-                "ECOFLOW_DEVICE_SN is required when using user credentials."
-            )
+            raise ValueError("ECOFLOW_DEVICE_SN is required when using user credentials.")
 
         if api_type == "mqtt":
             return MqttApiClient(account_user, account_password, device_sn)
         elif api_type == "device":
             return DeviceApiClient(account_user, account_password, device_sn)
         else:
-            raise ValueError(
-                f"Invalid ECOFLOW_API_TYPE: '{api_type}'. "
-                "Must be 'mqtt' or 'device'."
-            )
+            raise ValueError(f"Invalid ECOFLOW_API_TYPE: '{api_type}'. Must be 'mqtt' or 'device'.")
 
     raise ValueError(
         "Missing credentials. Provide either:\n"

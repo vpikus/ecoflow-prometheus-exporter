@@ -1,13 +1,12 @@
 """Tests for ecoflow/proto/decoder.py - Protobuf decoder."""
 
 import base64
-from unittest.mock import patch
 
 import pytest
 
-from ecoflow.proto.decoder import ProtobufDecoder, _flatten_dict, get_decoder
 from ecoflow.proto import common_pb2 as common
 from ecoflow.proto import device_common_pb2 as device_common
+from ecoflow.proto.decoder import ProtobufDecoder, _flatten_dict, get_decoder
 
 
 class TestFlattenDict:

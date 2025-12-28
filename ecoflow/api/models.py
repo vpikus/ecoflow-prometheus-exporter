@@ -11,5 +11,5 @@ class DeviceInfo:
 
     sn: str
     name: str
-    product_name: str
+    product_name: str | None
     online: bool

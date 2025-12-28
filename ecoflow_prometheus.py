@@ -6,8 +6,7 @@ import time
 
 from prometheus_client import REGISTRY, start_http_server
 
-from ecoflow.api import EcoflowApiException, create_client
-from ecoflow.api import CredentialsConflictError
+from ecoflow.api import CredentialsConflictError, EcoflowApiException, create_client
 from ecoflow.devices import build_device_name, get_device_general_key, get_product_name
 from ecoflow.worker import Worker
 

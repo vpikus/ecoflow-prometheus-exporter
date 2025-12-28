@@ -38,7 +38,7 @@ class TestDeviceApiClient:
     @pytest.fixture
     def mock_auth(self):
         """Mock MQTT authentication."""
-        with patch('ecoflow.api.device.MqttAuthentication') as mock:
+        with patch("ecoflow.api.device.MqttAuthentication") as mock:
             auth = MagicMock()
             auth.mqtt_url = "mqtt.test.com"
             auth.mqtt_port = 8883
@@ -52,7 +52,7 @@ class TestDeviceApiClient:
     @pytest.fixture
     def mock_mqtt_client(self):
         """Mock MQTT client."""
-        with patch('paho.mqtt.client.Client') as mock:
+        with patch("paho.mqtt.client.Client") as mock:
             client = MagicMock()
             mock.return_value = client
             yield client
@@ -60,7 +60,7 @@ class TestDeviceApiClient:
     @pytest.fixture
     def mock_proto_decoder(self):
         """Mock protobuf decoder."""
-        with patch('ecoflow.proto.decoder.get_decoder') as mock:
+        with patch("ecoflow.proto.decoder.get_decoder") as mock:
             decoder = MagicMock()
             decoder.decode.return_value = {}
             mock.return_value = decoder
@@ -73,7 +73,7 @@ class TestDeviceApiClient:
         assert client.device_sn == "DEV123"
         assert client._quota_cache == {}
 
-    @patch('ecoflow.api.device.RepeatTimer')
+    @patch("ecoflow.api.device.RepeatTimer")
     def test_connect_success(self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder):
         """Test successful connection."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
@@ -92,7 +92,7 @@ class TestDeviceApiClient:
         assert client._data_topic == "/app/device/property/DEV123"
         assert client._get_topic == "/app/user123/DEV123/thing/property/get"
 
-    @patch('ecoflow.api.device.RepeatTimer')
+    @patch("ecoflow.api.device.RepeatTimer")
     def test_connect_timeout(self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder):
         """Test connection timeout."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
@@ -104,7 +104,7 @@ class TestDeviceApiClient:
 
         assert "Failed to connect" in str(exc_info.value)
 
-    @patch('ecoflow.api.device.RepeatTimer')
+    @patch("ecoflow.api.device.RepeatTimer")
     def test_disconnect(self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder):
         """Test disconnection."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
@@ -209,13 +209,12 @@ class TestDeviceApiClient:
         """Test handling quota reply when device is online."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
 
-        payload = json.dumps({
-            "operateType": "latestQuotas",
-            "data": {
-                "online": 1,
-                "quotaMap": {"soc": 75, "watts": 200}
+        payload = json.dumps(
+            {
+                "operateType": "latestQuotas",
+                "data": {"online": 1, "quotaMap": {"soc": 75, "watts": 200}},
             }
-        })
+        )
 
         client._handle_quota_reply(payload)
 
@@ -226,13 +225,7 @@ class TestDeviceApiClient:
         """Test handling quota reply when device is offline."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
 
-        payload = json.dumps({
-            "operateType": "latestQuotas",
-            "data": {
-                "online": 0,
-                "quotaMap": {}
-            }
-        })
+        payload = json.dumps({"operateType": "latestQuotas", "data": {"online": 0, "quotaMap": {}}})
 
         client._handle_quota_reply(payload)
 
@@ -252,9 +245,7 @@ class TestDeviceApiClient:
         """Test handling push data message."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
 
-        payload = json.dumps({
-            "params": {"soc": 80, "temp": 25}
-        })
+        payload = json.dumps({"params": {"soc": 80, "temp": 25}})
 
         client._handle_data_message(payload)
 
@@ -271,8 +262,10 @@ class TestDeviceApiClient:
 
         assert client._quota_cache == {}
 
-    @patch('ecoflow.api.device.RepeatTimer')
-    def test_request_quota_not_connected(self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder):
+    @patch("ecoflow.api.device.RepeatTimer")
+    def test_request_quota_not_connected(
+        self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder
+    ):
         """Test quota request when not connected."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
 
@@ -282,8 +275,10 @@ class TestDeviceApiClient:
         # Should not have published
         mock_mqtt_client.publish.assert_not_called()
 
-    @patch('ecoflow.api.device.RepeatTimer')
-    def test_request_quota_skip_recent_push(self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder):
+    @patch("ecoflow.api.device.RepeatTimer")
+    def test_request_quota_skip_recent_push(
+        self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder
+    ):
         """Test quota request skipped when recent push data received."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
         client._connected.set()
@@ -296,8 +291,10 @@ class TestDeviceApiClient:
         # Should not have published (recent push data)
         mock_mqtt_client.publish.assert_not_called()
 
-    @patch('ecoflow.api.device.RepeatTimer')
-    def test_request_quota_sends_request(self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder):
+    @patch("ecoflow.api.device.RepeatTimer")
+    def test_request_quota_sends_request(
+        self, mock_timer, mock_auth, mock_mqtt_client, mock_proto_decoder
+    ):
         """Test quota request is sent when needed."""
         client = DeviceApiClient("test@example.com", "password", "DEV123")
         client._connected.set()
@@ -316,7 +313,7 @@ class TestDeviceApiClient:
         client = DeviceApiClient("test@example.com", "password", "DEV123")
         mock_proto_decoder.decode.return_value = {"soc": 90, "temp": 30}
 
-        client._handle_binary_message(b'\x00\x01\x02')
+        client._handle_binary_message(b"\x00\x01\x02")
 
         assert client._quota_cache["soc"] == 90
         assert client._quota_cache["temp"] == 30
@@ -326,7 +323,7 @@ class TestDeviceApiClient:
         client = DeviceApiClient("test@example.com", "password", "DEV123")
         mock_proto_decoder.decode.return_value = {}
 
-        client._handle_binary_message(b'\x00\x01\x02')
+        client._handle_binary_message(b"\x00\x01\x02")
 
         assert client._quota_cache == {}
 
@@ -336,7 +333,7 @@ class TestDeviceApiClient:
         mock_proto_decoder.decode.side_effect = Exception("Decode error")
 
         # Should not raise
-        client._handle_binary_message(b'\x00\x01\x02')
+        client._handle_binary_message(b"\x00\x01\x02")
 
         assert client._quota_cache == {}
 
@@ -346,7 +343,7 @@ class TestDeviceApiClient:
         client._last_message_time = time.time()  # Recent message
 
         # Should not reconnect
-        with patch.object(client, '_reconnect') as mock_reconnect:
+        with patch.object(client, "_reconnect") as mock_reconnect:
             client._check_idle()
             mock_reconnect.assert_not_called()
 
@@ -355,7 +352,7 @@ class TestDeviceApiClient:
         client = DeviceApiClient("test@example.com", "password", "DEV123")
         client._last_message_time = time.time() - 120  # 2 minutes ago
 
-        with patch.object(client, '_reconnect') as mock_reconnect:
+        with patch.object(client, "_reconnect") as mock_reconnect:
             client._check_idle()
             mock_reconnect.assert_called_once()
 

@@ -5,8 +5,9 @@ import os
 import ssl
 import time
 import uuid
+from collections.abc import Callable
 from threading import Event, Lock, Thread, Timer
-from typing import Any, Callable
+from typing import Any
 
 import paho.mqtt.client as mqtt
 import requests
@@ -68,10 +69,10 @@ class MqttAuthentication:
         log.info("Logging in to EcoFlow API at %s", url)
         try:
             response = requests.post(url, json=data, headers=headers, timeout=HTTP_TIMEOUT)
-        except requests.Timeout:
-            raise EcoflowApiException(f"Login request to {url} timed out")
+        except requests.Timeout as e:
+            raise EcoflowApiException(f"Login request to {url} timed out") from e
         except requests.RequestException as e:
-            raise EcoflowApiException(f"Login request failed: {e}")
+            raise EcoflowApiException(f"Login request failed: {e}") from e
         json_response = self._parse_response(response)
 
         try:
@@ -79,7 +80,7 @@ class MqttAuthentication:
             user_id = json_response["data"]["user"]["userId"]
             user_name = json_response["data"]["user"]["name"]
         except KeyError as key:
-            raise EcoflowApiException(f"Missing key {key} in login response")
+            raise EcoflowApiException(f"Missing key {key} in login response") from key
 
         log.info("Successfully logged in as: %s", user_name)
         return token, user_id, user_name
@@ -93,10 +94,10 @@ class MqttAuthentication:
         log.info("Requesting MQTT credentials from %s", url)
         try:
             response = requests.get(url, params=params, headers=headers, timeout=HTTP_TIMEOUT)
-        except requests.Timeout:
-            raise EcoflowApiException(f"MQTT credentials request to {url} timed out")
+        except requests.Timeout as e:
+            raise EcoflowApiException(f"MQTT credentials request to {url} timed out") from e
         except requests.RequestException as e:
-            raise EcoflowApiException(f"MQTT credentials request failed: {e}")
+            raise EcoflowApiException(f"MQTT credentials request failed: {e}") from e
         json_response = self._parse_response(response)
 
         try:
@@ -106,7 +107,7 @@ class MqttAuthentication:
             self.mqtt_password = json_response["data"]["certificatePassword"]
             self.mqtt_client_id = f"ANDROID_{str(uuid.uuid4()).upper()}_{user_id}"
         except KeyError as key:
-            raise EcoflowApiException(f"Missing key {key} in MQTT credentials response")
+            raise EcoflowApiException(f"Missing key {key} in MQTT credentials response") from key
 
         log.info("MQTT credentials obtained for account: %s", self.mqtt_username)
 
@@ -116,14 +117,12 @@ class MqttAuthentication:
         Handles both User API (message="Success") and Developer API (code="0").
         """
         if response.status_code != 200:
-            raise EcoflowApiException(
-                f"HTTP {response.status_code}: {response.text}"
-            )
+            raise EcoflowApiException(f"HTTP {response.status_code}: {response.text}")
 
         try:
             json_data = response.json()
         except json.JSONDecodeError as e:
-            raise EcoflowApiException(f"Invalid JSON response: {e}")
+            raise EcoflowApiException(f"Invalid JSON response: {e}") from e
 
         # Check for success: code="0" (Developer API) or message="Success" (User API)
         code = str(json_data.get("code", ""))
@@ -168,9 +167,7 @@ class MqttConnection:
             self.client.loop_stop()
             self.client.disconnect()
 
-        self.client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2, self.auth.mqtt_client_id
-        )
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, self.auth.mqtt_client_id)
         self.client.username_pw_set(self.auth.mqtt_username, self.auth.mqtt_password)
         self.client.tls_set(certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED)
         self.client.tls_insecure_set(False)
@@ -279,6 +276,7 @@ class MqttApiClient(EcoflowApiClient):
 
         # Initialize generic protobuf decoder for all devices
         from ..proto.decoder import get_decoder
+
         self._proto_decoder = get_decoder()
         log.info("Protobuf decoder enabled")
 
@@ -397,9 +395,7 @@ class MqttApiClient(EcoflowApiClient):
             self._mqtt.last_message_time
             and time.time() - self._mqtt.last_message_time > MQTT_TIMEOUT
         ):
-            log.warning(
-                "No MQTT messages for %d seconds, reconnecting...", MQTT_TIMEOUT
-            )
+            log.warning("No MQTT messages for %d seconds, reconnecting...", MQTT_TIMEOUT)
             self._reconnect()
 
     def _reconnect(self) -> None:

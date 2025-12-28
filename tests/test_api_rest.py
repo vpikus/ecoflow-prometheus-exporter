@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from ecoflow.api.rest import RestApiClient, RestApiAuthentication
-from ecoflow.api.models import EcoflowApiException, DeviceInfo
+from ecoflow.api.models import DeviceInfo, EcoflowApiException
+from ecoflow.api.rest import RestApiAuthentication, RestApiClient
 
 
 class TestRestApiAuthentication:
@@ -63,7 +63,7 @@ class TestRestApiClient:
     @pytest.fixture
     def mock_session(self):
         """Mock requests session."""
-        with patch('ecoflow.api.rest._create_session') as mock:
+        with patch("ecoflow.api.rest._create_session") as mock:
             session = MagicMock()
             mock.return_value = session
             yield session
@@ -80,9 +80,9 @@ class TestRestApiClient:
                     "sn": "TEST123",
                     "deviceName": "My Device",
                     "productName": "Delta Pro",
-                    "online": 1
+                    "online": 1,
                 }
-            ]
+            ],
         }
         mock_session.request.return_value = mock_response
 
@@ -95,10 +95,7 @@ class TestRestApiClient:
         """Test connection with API error response."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "code": "1001",
-            "message": "Invalid signature"
-        }
+        mock_response.json.return_value = {"code": "1001", "message": "Invalid signature"}
         mock_session.request.return_value = mock_response
 
         with pytest.raises(EcoflowApiException) as exc_info:
@@ -158,7 +155,7 @@ class TestRestApiClient:
             "data": [
                 {"sn": "DEV1", "deviceName": "Device 1", "productName": "Delta", "online": 1},
                 {"sn": "DEV2", "deviceName": "Device 2", "productName": "River", "online": 0},
-            ]
+            ],
         }
         mock_session.request.return_value = mock_response
 
@@ -179,7 +176,7 @@ class TestRestApiClient:
             "code": "0",
             "data": [
                 {"sn": "DEV1", "deviceName": "Device 1", "productName": "Delta", "online": 1},
-            ]
+            ],
         }
         mock_session.request.return_value = mock_response
 
@@ -197,7 +194,7 @@ class TestRestApiClient:
             "code": "0",
             "data": [
                 {"sn": "DEV1", "deviceName": "Device 1", "productName": "Delta", "online": 1},
-            ]
+            ],
         }
         mock_session.request.return_value = mock_response
 
@@ -218,11 +215,7 @@ class TestRestApiClient:
         quota_response.status_code = 200
         quota_response.json.return_value = {
             "code": "0",
-            "data": {
-                "soc": 85,
-                "wattsIn": 120,
-                "wattsOut": 450
-            }
+            "data": {"soc": 85, "wattsIn": 120, "wattsOut": 450},
         }
 
         mock_session.request.side_effect = [devices_response, quota_response]
@@ -261,12 +254,7 @@ class TestRestApiClient:
 
     def test_parse_device(self, client):
         """Test parsing device data."""
-        data = {
-            "sn": "TEST123",
-            "deviceName": "My Device",
-            "productName": "Delta Pro",
-            "online": 1
-        }
+        data = {"sn": "TEST123", "deviceName": "My Device", "productName": "Delta Pro", "online": 1}
 
         device = client._parse_device(data)
 
@@ -278,12 +266,7 @@ class TestRestApiClient:
 
     def test_parse_device_offline(self, client):
         """Test parsing offline device."""
-        data = {
-            "sn": "TEST123",
-            "deviceName": "My Device",
-            "productName": "Delta Pro",
-            "online": 0
-        }
+        data = {"sn": "TEST123", "deviceName": "My Device", "productName": "Delta Pro", "online": 0}
 
         device = client._parse_device(data)
 

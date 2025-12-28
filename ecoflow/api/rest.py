@@ -136,11 +136,13 @@ class RestApiClient(EcoflowApiClient):
         headers.update(sign_params)
 
         try:
-            response = self._session.request(method, url, headers=headers, params=params, timeout=HTTP_TIMEOUT)
-        except requests.Timeout:
-            raise EcoflowApiException(f"Request to {url} timed out after {HTTP_TIMEOUT}s")
+            response = self._session.request(
+                method, url, headers=headers, params=params, timeout=HTTP_TIMEOUT
+            )
+        except requests.Timeout as e:
+            raise EcoflowApiException(f"Request to {url} timed out after {HTTP_TIMEOUT}s") from e
         except requests.RequestException as e:
-            raise EcoflowApiException(f"Request failed: {e}")
+            raise EcoflowApiException(f"Request failed: {e}") from e
 
         # Check for HTTP errors
         if response.status_code >= 400:
@@ -150,7 +152,7 @@ class RestApiClient(EcoflowApiClient):
         try:
             json_data = response.json()
         except json.JSONDecodeError as e:
-            raise EcoflowApiException(f"Invalid JSON response: {e}")
+            raise EcoflowApiException(f"Invalid JSON response: {e}") from e
 
         log.debug("Payload: %s", json_data)
 

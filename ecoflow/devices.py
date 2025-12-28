@@ -99,7 +99,9 @@ def get_device_general_key(device_sn: str) -> str:
         general_key = matched.get("generalKey", "unknown")
         log.debug(
             "Matched device SN %s with prefix %s, general key: %s",
-            device_sn, matched.get("sn"), general_key
+            device_sn,
+            matched.get("sn"),
+            general_key,
         )
         return general_key
 
