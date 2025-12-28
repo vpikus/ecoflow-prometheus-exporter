@@ -1,14 +1,12 @@
 """Tests for ecoflow/api/mqtt.py - MQTT API client."""
 
-import json
-import os
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from ecoflow.api.mqtt import MqttAuthentication, MqttConnection, MqttApiClient
-from ecoflow.api.models import EcoflowApiException, DeviceInfo
+from ecoflow.api.models import EcoflowApiException
+from ecoflow.api.mqtt import MqttApiClient, MqttAuthentication, MqttConnection
 
 
 class TestMqttAuthentication:
@@ -26,7 +24,7 @@ class TestMqttAuthentication:
         assert auth.mqtt_url == "mqtt.ecoflow.com"
         assert auth.mqtt_port == 8883
 
-    @patch('requests.post')
+    @patch("requests.post")
     def test_login_success(self, mock_post, auth):
         """Test successful login."""
         mock_response = MagicMock()
@@ -34,13 +32,7 @@ class TestMqttAuthentication:
         mock_response.json.return_value = {
             "code": "0",
             "message": "Success",
-            "data": {
-                "token": "test_token",
-                "user": {
-                    "userId": "user123",
-                    "name": "Test User"
-                }
-            }
+            "data": {"token": "test_token", "user": {"userId": "user123", "name": "Test User"}},
         }
         mock_post.return_value = mock_response
 
@@ -50,7 +42,7 @@ class TestMqttAuthentication:
         assert user_id == "user123"
         assert user_name == "Test User"
 
-    @patch('requests.post')
+    @patch("requests.post")
     def test_login_timeout(self, mock_post, auth):
         """Test login timeout."""
         mock_post.side_effect = requests.Timeout()
@@ -60,7 +52,7 @@ class TestMqttAuthentication:
 
         assert "timed out" in str(exc_info.value)
 
-    @patch('requests.post')
+    @patch("requests.post")
     def test_login_http_error(self, mock_post, auth):
         """Test login with HTTP error."""
         mock_response = MagicMock()
@@ -73,7 +65,7 @@ class TestMqttAuthentication:
 
         assert "HTTP 401" in str(exc_info.value)
 
-    @patch('requests.post')
+    @patch("requests.post")
     def test_login_missing_token(self, mock_post, auth):
         """Test login with missing token in response."""
         mock_response = MagicMock()
@@ -81,7 +73,7 @@ class TestMqttAuthentication:
         mock_response.json.return_value = {
             "code": "0",
             "message": "Success",
-            "data": {}  # Missing token
+            "data": {},  # Missing token
         }
         mock_post.return_value = mock_response
 
@@ -90,8 +82,8 @@ class TestMqttAuthentication:
 
         assert "Missing key" in str(exc_info.value)
 
-    @patch('requests.get')
-    @patch('requests.post')
+    @patch("requests.get")
+    @patch("requests.post")
     def test_authorize_success(self, mock_post, mock_get, auth):
         """Test full authorization flow."""
         # Login response
@@ -99,10 +91,7 @@ class TestMqttAuthentication:
         login_response.status_code = 200
         login_response.json.return_value = {
             "code": "0",
-            "data": {
-                "token": "test_token",
-                "user": {"userId": "user123", "name": "Test User"}
-            }
+            "data": {"token": "test_token", "user": {"userId": "user123", "name": "Test User"}},
         }
         mock_post.return_value = login_response
 
@@ -115,8 +104,8 @@ class TestMqttAuthentication:
                 "url": "mqtt.test.com",
                 "port": "8883",
                 "certificateAccount": "mqtt_user",
-                "certificatePassword": "mqtt_pass"
-            }
+                "certificatePassword": "mqtt_pass",
+            },
         }
         mock_get.return_value = mqtt_response
 
@@ -178,7 +167,7 @@ class TestMqttConnection:
         """Create message callback."""
         return MagicMock()
 
-    @patch('paho.mqtt.client.Client')
+    @patch("paho.mqtt.client.Client")
     def test_connect(self, mock_client_class, auth, message_callback):
         """Test MQTT connection."""
         mock_client = MagicMock()
@@ -189,12 +178,10 @@ class TestMqttConnection:
 
         mock_client.username_pw_set.assert_called_once()
         mock_client.tls_set.assert_called_once()
-        mock_client.connect.assert_called_once_with(
-            "mqtt.test.com", 8883, keepalive=60
-        )
+        mock_client.connect.assert_called_once_with("mqtt.test.com", 8883, keepalive=60)
         mock_client.loop_start.assert_called_once()
 
-    @patch('paho.mqtt.client.Client')
+    @patch("paho.mqtt.client.Client")
     def test_disconnect(self, mock_client_class, auth, message_callback):
         """Test MQTT disconnection."""
         mock_client = MagicMock()
@@ -207,7 +194,7 @@ class TestMqttConnection:
         mock_client.loop_stop.assert_called()
         mock_client.disconnect.assert_called()
 
-    @patch('paho.mqtt.client.Client')
+    @patch("paho.mqtt.client.Client")
     def test_on_connect_success(self, mock_client_class, auth, message_callback):
         """Test successful connection callback."""
         mock_client = MagicMock()
@@ -222,7 +209,7 @@ class TestMqttConnection:
         assert conn.is_connected()
         mock_client.subscribe.assert_called()
 
-    @patch('paho.mqtt.client.Client')
+    @patch("paho.mqtt.client.Client")
     def test_on_connect_failure(self, mock_client_class, auth, message_callback):
         """Test failed connection callback."""
         mock_client = MagicMock()
@@ -232,11 +219,13 @@ class TestMqttConnection:
         conn.connect()
 
         # Simulate failed connection
-        conn._on_connect(mock_client, None, None, MagicMock(__str__=lambda x: "Connection refused"), None)
+        conn._on_connect(
+            mock_client, None, None, MagicMock(__str__=lambda x: "Connection refused"), None
+        )
 
         assert not conn.is_connected()
 
-    @patch('paho.mqtt.client.Client')
+    @patch("paho.mqtt.client.Client")
     def test_on_message_json(self, mock_client_class, auth, message_callback):
         """Test receiving JSON message."""
         mock_client = MagicMock()
@@ -252,7 +241,7 @@ class TestMqttConnection:
 
         message_callback.assert_called_once()
 
-    @patch('paho.mqtt.client.Client')
+    @patch("paho.mqtt.client.Client")
     def test_on_message_binary(self, mock_client_class, auth, message_callback):
         """Test receiving binary message."""
         mock_client = MagicMock()
@@ -264,10 +253,10 @@ class TestMqttConnection:
 
         # Simulate binary message with invalid UTF-8 bytes that trigger UnicodeDecodeError
         message = MagicMock()
-        message.payload = b'\x80\x81\x82\x83'  # Invalid UTF-8 sequence
+        message.payload = b"\x80\x81\x82\x83"  # Invalid UTF-8 sequence
         conn._on_message(mock_client, None, message)
 
-        binary_callback.assert_called_once_with(b'\x80\x81\x82\x83')
+        binary_callback.assert_called_once_with(b"\x80\x81\x82\x83")
 
 
 class TestMqttApiClient:
@@ -276,13 +265,13 @@ class TestMqttApiClient:
     @pytest.fixture
     def mock_auth(self):
         """Mock authentication."""
-        with patch.object(MqttAuthentication, 'authorize'):
+        with patch.object(MqttAuthentication, "authorize"):
             yield
 
     @pytest.fixture
     def mock_connection(self):
         """Mock MQTT connection."""
-        with patch('ecoflow.api.mqtt.MqttConnection') as mock:
+        with patch("ecoflow.api.mqtt.MqttConnection") as mock:
             conn = MagicMock()
             conn.is_connected.return_value = True
             conn.wait_connected.return_value = True
@@ -290,8 +279,8 @@ class TestMqttApiClient:
             mock.return_value = conn
             yield conn
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_connect_success(self, mock_conn_class, mock_auth_class):
         """Test successful connection."""
         mock_auth = MagicMock()
@@ -308,8 +297,8 @@ class TestMqttApiClient:
         mock_auth.authorize.assert_called_once()
         mock_conn.connect.assert_called_once()
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_connect_timeout(self, mock_conn_class, mock_auth_class):
         """Test connection timeout."""
         mock_auth = MagicMock()
@@ -326,8 +315,8 @@ class TestMqttApiClient:
 
         assert "Failed to connect" in str(exc_info.value)
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_get_devices(self, mock_conn_class, mock_auth_class):
         """Test getting device list."""
         mock_auth = MagicMock()
@@ -346,8 +335,8 @@ class TestMqttApiClient:
         assert len(devices) == 1
         assert devices[0].sn == "DEV123"
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_get_device_found(self, mock_conn_class, mock_auth_class):
         """Test getting specific device."""
         mock_auth = MagicMock()
@@ -366,8 +355,8 @@ class TestMqttApiClient:
         assert device is not None
         assert device.sn == "DEV123"
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_get_device_not_found(self, mock_conn_class, mock_auth_class):
         """Test getting non-existent device."""
         mock_auth = MagicMock()
@@ -384,8 +373,8 @@ class TestMqttApiClient:
 
         assert device is None
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_get_device_quota_cached(self, mock_conn_class, mock_auth_class):
         """Test getting cached quota data."""
         mock_auth = MagicMock()
@@ -407,8 +396,8 @@ class TestMqttApiClient:
         assert quota["soc"] == 85
         assert quota["watts"] == 100
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_get_device_quota_wrong_sn(self, mock_conn_class, mock_auth_class):
         """Test getting quota for wrong device SN."""
         mock_auth = MagicMock()
@@ -427,8 +416,8 @@ class TestMqttApiClient:
 
         assert quota == {}
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_handle_message(self, mock_conn_class, mock_auth_class):
         """Test handling incoming message."""
         mock_auth = MagicMock()
@@ -449,8 +438,8 @@ class TestMqttApiClient:
         assert client._quota_cache["soc"] == 75
         assert client._quota_cache["wattsIn"] == 200
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_handle_message_invalid_json(self, mock_conn_class, mock_auth_class):
         """Test handling invalid JSON message."""
         mock_auth = MagicMock()
@@ -470,8 +459,8 @@ class TestMqttApiClient:
         # Cache should remain empty
         assert client._quota_cache == {}
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_device_info_product_name_none(self, mock_conn_class, mock_auth_class):
         """Test that device info has product_name as None (not 'Unknown')."""
         mock_auth = MagicMock()
@@ -490,9 +479,9 @@ class TestMqttApiClient:
 
         assert device.product_name is None
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
-    @patch('ecoflow.api.mqtt.RepeatTimer')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
+    @patch("ecoflow.api.mqtt.RepeatTimer")
     def test_disconnect(self, mock_timer_class, mock_conn_class, mock_auth_class):
         """Test disconnecting from MQTT broker."""
         mock_auth = MagicMock()
@@ -515,11 +504,12 @@ class TestMqttApiClient:
         assert client._mqtt is None
         assert client._idle_timer is None
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_device_info_offline_no_recent_update(self, mock_conn_class, mock_auth_class):
         """Test device info when no recent update received."""
         import time
+
         mock_auth = MagicMock()
         mock_auth_class.return_value = mock_auth
 
@@ -539,8 +529,8 @@ class TestMqttApiClient:
 
         assert device.online is False
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_handle_binary_message_success(self, mock_conn_class, mock_auth_class):
         """Test handling binary protobuf message."""
         mock_auth = MagicMock()
@@ -557,13 +547,13 @@ class TestMqttApiClient:
         # Mock the decoder
         client._proto_decoder.decode = MagicMock(return_value={"soc": 85, "temp": 25})
 
-        client._handle_binary_message(b'\x00\x01\x02')
+        client._handle_binary_message(b"\x00\x01\x02")
 
         assert client._quota_cache["soc"] == 85
         assert client._quota_cache["temp"] == 25
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_handle_binary_message_empty(self, mock_conn_class, mock_auth_class):
         """Test handling binary message with empty decode result."""
         mock_auth = MagicMock()
@@ -580,12 +570,12 @@ class TestMqttApiClient:
         # Mock decoder returning empty dict
         client._proto_decoder.decode = MagicMock(return_value={})
 
-        client._handle_binary_message(b'\x00\x01\x02')
+        client._handle_binary_message(b"\x00\x01\x02")
 
         assert client._quota_cache == {}
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_handle_binary_message_error(self, mock_conn_class, mock_auth_class):
         """Test handling binary message decode error."""
         mock_auth = MagicMock()
@@ -603,12 +593,12 @@ class TestMqttApiClient:
         client._proto_decoder.decode = MagicMock(side_effect=Exception("Decode error"))
 
         # Should not raise
-        client._handle_binary_message(b'\x00\x01\x02')
+        client._handle_binary_message(b"\x00\x01\x02")
 
         assert client._quota_cache == {}
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_check_idle_no_mqtt(self, mock_conn_class, mock_auth_class):
         """Test check_idle when mqtt is None."""
         mock_auth = MagicMock()
@@ -620,11 +610,12 @@ class TestMqttApiClient:
         # Should not raise
         client._check_idle()
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_check_idle_recent_message(self, mock_conn_class, mock_auth_class):
         """Test check_idle when message was recent."""
         import time
+
         mock_auth = MagicMock()
         mock_auth_class.return_value = mock_auth
 
@@ -637,15 +628,16 @@ class TestMqttApiClient:
         client = MqttApiClient("test@example.com", "password", "DEV123")
         client.connect()
 
-        with patch.object(client, '_reconnect') as mock_reconnect:
+        with patch.object(client, "_reconnect") as mock_reconnect:
             client._check_idle()
             mock_reconnect.assert_not_called()
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_check_idle_triggers_reconnect(self, mock_conn_class, mock_auth_class):
         """Test check_idle triggers reconnect when idle too long."""
         import time
+
         mock_auth = MagicMock()
         mock_auth_class.return_value = mock_auth
 
@@ -658,12 +650,12 @@ class TestMqttApiClient:
         client = MqttApiClient("test@example.com", "password", "DEV123")
         client.connect()
 
-        with patch.object(client, '_reconnect') as mock_reconnect:
+        with patch.object(client, "_reconnect") as mock_reconnect:
             client._check_idle()
             mock_reconnect.assert_called_once()
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_reconnect_no_mqtt(self, mock_conn_class, mock_auth_class):
         """Test reconnect when mqtt is None."""
         mock_auth = MagicMock()
@@ -675,8 +667,8 @@ class TestMqttApiClient:
         # Should not raise
         client._reconnect()
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_reconnect_success(self, mock_conn_class, mock_auth_class):
         """Test successful reconnection."""
         mock_auth = MagicMock()
@@ -697,8 +689,8 @@ class TestMqttApiClient:
         # Should reset delay on success
         assert client._reconnect_delay == 30  # IDLE_CHECK_INTERVAL
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_reconnect_failure(self, mock_conn_class, mock_auth_class):
         """Test failed reconnection applies backoff."""
         mock_auth = MagicMock()
@@ -719,8 +711,8 @@ class TestMqttApiClient:
         # Should apply backoff
         assert client._reconnect_delay == initial_delay * 2
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_apply_backoff(self, mock_conn_class, mock_auth_class):
         """Test exponential backoff application."""
         mock_auth = MagicMock()
@@ -740,8 +732,8 @@ class TestMqttApiClient:
         assert client._reconnect_delay == initial_delay * 2
         assert client._mqtt.last_message_time is not None
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_apply_backoff_capped(self, mock_conn_class, mock_auth_class):
         """Test that backoff is capped at max delay."""
         mock_auth = MagicMock()
@@ -760,8 +752,8 @@ class TestMqttApiClient:
 
         assert client._reconnect_delay <= 300  # MAX_RECONNECT_DELAY
 
-    @patch('ecoflow.api.mqtt.MqttAuthentication')
-    @patch('ecoflow.api.mqtt.MqttConnection')
+    @patch("ecoflow.api.mqtt.MqttAuthentication")
+    @patch("ecoflow.api.mqtt.MqttConnection")
     def test_handle_message_exception(self, mock_conn_class, mock_auth_class):
         """Test handling message with unexpected exception."""
         mock_auth = MagicMock()

@@ -1,7 +1,7 @@
 """Tests for ecoflow/metrics/prometheus.py - Prometheus metrics wrapper."""
 
 import pytest
-from prometheus_client import Counter, Gauge, Info, REGISTRY
+from prometheus_client import REGISTRY, Counter, Gauge
 
 from ecoflow.metrics.prometheus import EcoflowMetric
 

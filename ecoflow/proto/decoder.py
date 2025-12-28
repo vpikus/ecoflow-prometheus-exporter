@@ -93,7 +93,7 @@ class ProtobufDecoder:
                         log.warning(
                             "Failed to decode DisplayPropertyUpload: %s, payload (hex): %s",
                             e,
-                            pdata.hex()
+                            pdata.hex(),
                         )
                 else:
                     # Log unhandled message types with their payload
@@ -101,7 +101,7 @@ class ProtobufDecoder:
                         "Unhandled protobuf message: cmd_func=%d, cmd_id=%d, payload (hex): %s",
                         cmd_func,
                         cmd_id,
-                        pdata.hex()
+                        pdata.hex(),
                     )
 
         except Exception as e:

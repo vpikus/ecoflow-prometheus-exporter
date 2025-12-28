@@ -77,6 +77,7 @@ class DeviceApiClient(EcoflowApiClient):
 
         # Initialize generic protobuf decoder for all devices
         from ..proto.decoder import get_decoder
+
         self._proto_decoder = get_decoder()
         log.info("Protobuf decoder enabled")
 
@@ -318,10 +319,7 @@ class DeviceApiClient(EcoflowApiClient):
         if self._last_push_data_time:
             time_since_push = time.time() - self._last_push_data_time
             if time_since_push < QUOTA_REQUEST_INTERVAL:
-                log.debug(
-                    "Skipping quota request, received push data %.1fs ago",
-                    time_since_push
-                )
+                log.debug("Skipping quota request, received push data %.1fs ago", time_since_push)
                 return
 
         message = {
@@ -342,10 +340,7 @@ class DeviceApiClient(EcoflowApiClient):
 
     def _check_idle(self) -> None:
         """Check for idle connection and reconnect if needed."""
-        if (
-            self._last_message_time
-            and time.time() - self._last_message_time > MQTT_TIMEOUT
-        ):
+        if self._last_message_time and time.time() - self._last_message_time > MQTT_TIMEOUT:
             log.warning("No MQTT messages for %d seconds, reconnecting...", MQTT_TIMEOUT)
             self._reconnect()
 

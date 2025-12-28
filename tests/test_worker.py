@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from prometheus_client import REGISTRY
 
-from ecoflow.worker import Worker
 from ecoflow.api.models import DeviceInfo, EcoflowApiException
 from ecoflow.metrics.prometheus import EcoflowMetric
+from ecoflow.worker import Worker
 
 
 @pytest.fixture(autouse=True)
@@ -105,7 +105,7 @@ class TestCollectData:
         device = DeviceInfo(sn="DEV123", name="Test", product_name="Product", online=False)
         worker.client.get_device.return_value = device
 
-        with patch.object(worker, '_reset_metrics') as mock_reset:
+        with patch.object(worker, "_reset_metrics") as mock_reset:
             worker._collect_data()
             mock_reset.assert_called_once()
 
@@ -117,7 +117,7 @@ class TestCollectData:
         worker.client.get_device.return_value = device
         worker.client.get_device_quota.return_value = {"soc": 85}
 
-        with patch.object(worker, '_update_metrics') as mock_update:
+        with patch.object(worker, "_update_metrics") as mock_update:
             worker._collect_data()
             mock_update.assert_called_once_with({"soc": 85})
 
@@ -141,7 +141,7 @@ class TestUpdateDeviceStatus:
         """Test updating status when device is online."""
         device = DeviceInfo(sn="DEV123", name="Test", product_name="Product", online=True)
 
-        with patch.object(worker.online, 'set') as mock_set:
+        with patch.object(worker.online, "set") as mock_set:
             worker._update_device_status(device)
             mock_set.assert_called_once_with(1)
 
@@ -149,7 +149,7 @@ class TestUpdateDeviceStatus:
         """Test updating status when device is offline."""
         device = DeviceInfo(sn="DEV123", name="Test", product_name="Product", online=False)
 
-        with patch.object(worker.online, 'set') as mock_set:
+        with patch.object(worker.online, "set") as mock_set:
             worker._update_device_status(device)
             mock_set.assert_called_once_with(0)
 
@@ -208,11 +208,7 @@ class TestUpdateMetric:
 
     def test_update_metric_nested(self, worker):
         """Test updating metric with nested structure."""
-        worker._update_metric("data", {
-            "bms": {
-                "cells": [3.7, 3.8]
-            }
-        })
+        worker._update_metric("data", {"bms": {"cells": [3.7, 3.8]}})
 
         assert "data.bms.cells[0]" in worker.metrics
         assert "data.bms.cells[1]" in worker.metrics
@@ -349,9 +345,9 @@ class TestRunLoop:
                 raise EcoflowApiException("Test error")
             raise KeyboardInterrupt  # Stop the loop
 
-        with patch.object(worker, '_collect_data', side_effect=side_effect):
-            with patch('time.sleep'):
-                with patch.object(worker.connection_errors, 'inc') as mock_inc:
+        with patch.object(worker, "_collect_data", side_effect=side_effect):
+            with patch("time.sleep"):
+                with patch.object(worker.connection_errors, "inc") as mock_inc:
                     try:
                         worker.run()
                     except KeyboardInterrupt:
@@ -369,8 +365,8 @@ class TestRunLoop:
             if call_count >= 2:
                 raise KeyboardInterrupt
 
-        with patch.object(worker, '_collect_data', side_effect=side_effect):
-            with patch('time.sleep'):
+        with patch.object(worker, "_collect_data", side_effect=side_effect):
+            with patch("time.sleep"):
                 try:
                     worker.run()
                 except KeyboardInterrupt:
