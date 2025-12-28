@@ -21,16 +21,19 @@ class Worker:
         device_sn: str,
         device_name: str,
         product_name: str,
+        device_general_key: str,
     ):
         self.client = client
         self.device_sn = device_sn
         self.device_name = device_name
         self.product_name = product_name
+        self.device_general_key = device_general_key
 
         self.labels = {
             "device": device_sn,
             "device_name": device_name,
             "product_name": product_name,
+            "device_general_key": device_general_key,
         }
 
         self.online = EcoflowMetric(

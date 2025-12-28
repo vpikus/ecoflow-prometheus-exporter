@@ -6,6 +6,7 @@ ADD requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 ADD ecoflow_prometheus.py .
+ADD devices.json .
 ADD ecoflow/ ./ecoflow/
 
 CMD [ "python", "ecoflow_prometheus.py" ]

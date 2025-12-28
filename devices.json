@@ -1,0 +1,22 @@
+[
+  {
+    "generalKey": "ecoflow_rapid_pro_charging_dock",
+    "name": "RAPID Pro Desktop Charger",
+    "sn": "P521"
+  },
+  {
+    "generalKey": "ecoflow_ps_river_256",
+    "name": "RIVER 2",
+    "sn": "R601"
+  },
+  {
+    "generalKey": "ecoflow_ps_delta_pro_3600",
+    "name": "DELTA Pro",
+    "sn": "DCE"
+  },
+  {
+    "generalKey": "ecoflow_ps_river_max_512",
+    "name": "RIVER 2 Max",
+    "sn": "R611"
+  }
+]

@@ -166,7 +166,7 @@ class DeviceApiClient(EcoflowApiClient):
         return DeviceInfo(
             sn=self.device_sn,
             name=os.getenv("ECOFLOW_DEVICE_NAME", self.device_sn),
-            product_name="Unknown",
+            product_name=None,
             online=online,
         )
 

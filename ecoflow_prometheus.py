@@ -8,6 +8,7 @@ from prometheus_client import REGISTRY, start_http_server
 
 from ecoflow.api import EcoflowApiException, create_client
 from ecoflow.api import CredentialsConflictError
+from ecoflow.devices import build_device_name, get_device_general_key, get_product_name
 from ecoflow.worker import Worker
 
 EXPORTER_PORT = int(os.getenv("EXPORTER_PORT", "9090"))
@@ -79,12 +80,19 @@ def main() -> None:
         log.error("Device with SN %s not found", device_sn)
         sys.exit(1)
 
-    device_name = device.name or os.getenv("ECOFLOW_DEVICE_NAME", device_sn)
-    product_name = device.product_name or "Unknown"
+    device_name = build_device_name(device_sn, device.name)
+    product_name = (
+        os.getenv("ECOFLOW_PRODUCT_NAME")
+        or device.product_name
+        or get_product_name(device_sn)
+        or "Unknown"
+    )
+    device_general_key = get_device_general_key(device_sn)
 
     log.info("Starting exporter for device: %s (%s)", device_name, product_name)
+    log.info("Device general key: %s", device_general_key)
 
-    worker = Worker(client, device_sn, device_name, product_name)
+    worker = Worker(client, device_sn, device_name, product_name, device_general_key)
 
     start_http_server(EXPORTER_PORT)
     log.info("Prometheus metrics available at http://0.0.0.0:%d", EXPORTER_PORT)

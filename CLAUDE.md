@@ -45,7 +45,9 @@ docker run -e ECOFLOW_DEVICE_SN=... -e ECOFLOW_ACCESS_KEY=... -e ECOFLOW_SECRET_
 ```
 ecoflow-prometheus-exporter/
 ├── ecoflow_prometheus.py      # Entry point
+├── devices.json               # Device definitions (SN prefix -> generalKey)
 └── ecoflow/
+    ├── devices.py             # Device discovery and general key resolution
     ├── api/
     │   ├── __init__.py        # Factory: create_client()
     │   ├── base.py            # EcoflowApiClient (ABC)
@@ -99,6 +101,13 @@ ecoflow-prometheus-exporter/
    - Uses ECOFLOW_API_TYPE to choose between MQTT and Device API
    - Raises `CredentialsConflictError` if both REST and user credentials provided
 
+6. **Device Discovery** (`ecoflow/devices.py`): Device type and name resolution
+   - `get_device_general_key(device_sn)`: Resolves device general key from SN prefix
+     - Priority: ECOFLOW_DEVICE_GENERAL_KEY env var > devices.json match > "unknown"
+   - `build_device_name(device_sn, api_name)`: Builds friendly device name
+     - Priority: ECOFLOW_DEVICE_NAME env var > API name (if differs from SN) > devices.json name + SN suffix > SN
+     - If API name equals SN, builds: `<name from devices.json>-<last 4 chars of SN>`
+
 ## Environment Variables
 
 ### Required
@@ -122,6 +131,9 @@ ecoflow-prometheus-exporter/
 |----------|---------|-------------|
 | ECOFLOW_API_TYPE | mqtt | API type: "mqtt" or "device" |
 | ECOFLOW_DEVICE_NAME | - | Override device name in metrics |
+| ECOFLOW_PRODUCT_NAME | - | Override product name in metrics |
+| ECOFLOW_DEVICE_GENERAL_KEY | - | Override device general key (auto-detected from devices.json) |
+| ECOFLOW_DEVICES_JSON | devices.json | Path to device definitions file |
 | ECOFLOW_API_HOST | api.ecoflow.com | API host for authentication |
 | EXPORTER_PORT | 9090 | Prometheus metrics port |
 | METRICS_PREFIX | ecoflow | Metric name prefix |

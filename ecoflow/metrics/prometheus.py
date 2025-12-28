@@ -16,7 +16,7 @@ class EcoflowMetric:
     """
 
     METRICS_POOL: dict[str, Union[Info, Gauge, Counter]] = {}
-    LABEL_NAMES = ["device", "device_name", "product_name"]
+    LABEL_NAMES = ["device", "device_name", "product_name", "device_general_key"]
 
     def __init__(
         self,

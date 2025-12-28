@@ -354,7 +354,7 @@ class MqttApiClient(EcoflowApiClient):
         return DeviceInfo(
             sn=self.device_sn,
             name=os.getenv("ECOFLOW_DEVICE_NAME", self.device_sn),
-            product_name="Unknown",  # MQTT doesn't provide this
+            product_name=None,
             online=online,
         )
 

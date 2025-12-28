@@ -153,6 +153,9 @@ docker-compose up -d
 | -------- | ------- | ----------- |
 | `ECOFLOW_API_TYPE` | `mqtt` | API type: `mqtt` or `device` |
 | `ECOFLOW_DEVICE_NAME` | — | Override device name in metrics |
+| `ECOFLOW_PRODUCT_NAME` | — | Override product name in metrics |
+| `ECOFLOW_DEVICE_GENERAL_KEY` | — | Override device general key (auto-detected from `devices.json`) |
+| `ECOFLOW_DEVICES_JSON` | `devices.json` | Path to device definitions file |
 | `ECOFLOW_API_HOST` | `api-e.ecoflow.com` | API host |
 | `EXPORTER_PORT` | `9090` | Prometheus metrics port |
 | `METRICS_PREFIX` | `ecoflow` | Metric name prefix |
@@ -178,6 +181,39 @@ docker-compose up -d
 | `MQTT_KEEPALIVE` | `60` | MQTT keepalive interval |
 | `IDLE_CHECK_INTERVAL` | `30` | Idle connection check frequency |
 | `MAX_RECONNECT_DELAY` | `300` | Max reconnect delay (backoff cap) |
+
+### Device General Key
+
+The `device_general_key` label identifies the device type and is used for grouping metrics across devices of the same model. It is resolved in the following order:
+
+1. `ECOFLOW_DEVICE_GENERAL_KEY` environment variable (highest priority)
+2. Matching device SN prefix in `devices.json`
+3. Falls back to `unknown` if no match found
+
+The `devices.json` file contains device definitions:
+
+```json
+[
+  {
+    "generalKey": "ecoflow_ps_delta_pro_3600",
+    "name": "EcoFlow DELTA Pro",
+    "sn": "DCA"
+  }
+]
+```
+
+If your device serial number starts with `DCA`, it will be matched to `ecoflow_ps_delta_pro_3600`.
+
+### Device Name Resolution
+
+The device name is resolved in the following order:
+
+1. `ECOFLOW_DEVICE_NAME` environment variable (highest priority)
+2. Device name from API (if different from serial number)
+3. Friendly name built from `devices.json`: `<name>-<last 4 chars of SN>`
+4. Falls back to device serial number
+
+For example, if your device SN is `P521ZE1B3H6J0717` and the API returns the same value as the name, the exporter will look up `devices.json`, find the entry with `"sn": "P521"`, and build the name as `EcoFlow RAPID Pro Desktop Charger-0717`.
 
 ## API Comparison
 
@@ -206,19 +242,26 @@ scrape_configs:
 
 Metrics are exported with the prefix `ecoflow_` (configurable via `METRICS_PREFIX`).
 
+All metrics include the following labels:
+
+- `device` - Device serial number
+- `device_name` - Device name (see [Device Name Resolution](#device-name-resolution))
+- `product_name` - Product name (from API or `devices.json`)
+- `device_general_key` - Device type identifier (auto-detected from `devices.json` or `ECOFLOW_DEVICE_GENERAL_KEY`)
+
 Example metrics:
 
 ```text
 # Device status
-ecoflow_online{device="DCXXX",device_name="My Delta",product_name="Delta 2"} 1
+ecoflow_online{device="DCA12345678",device_name="EcoFlow DELTA Pro-5678",product_name="Delta Pro",device_general_key="ecoflow_ps_delta_pro_3600"} 1
 
 # Battery
-ecoflow_bms_master_soc{device="DCXXX",...} 85
-ecoflow_bms_master_temp{device="DCXXX",...} 28
+ecoflow_bms_master_soc{device="DCA12345678",...} 85
+ecoflow_bms_master_temp{device="DCA12345678",...} 28
 
 # Power
-ecoflow_inv_input_watts{device="DCXXX",...} 120
-ecoflow_inv_output_watts{device="DCXXX",...} 450
+ecoflow_inv_input_watts{device="DCA12345678",...} 120
+ecoflow_inv_output_watts{device="DCA12345678",...} 450
 
 # And many more device-specific metrics...
 ```
