@@ -18,7 +18,7 @@ import os
 import secrets
 import ssl
 import time
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 from typing import Any
 
 import paho.mqtt.client as mqtt
@@ -347,21 +347,34 @@ class DeviceApiClient(EcoflowApiClient):
             and time.time() - self._last_message_time > MQTT_TIMEOUT
         ):
             log.warning("No MQTT messages for %d seconds, reconnecting...", MQTT_TIMEOUT)
-            self._connect_mqtt()
+            self._reconnect()
 
-            # Wait briefly for connection
-            if self._connected.wait(timeout=10):
-                log.info("Reconnection successful")
-                self._last_message_time = time.time()
-                self._reconnect_delay = IDLE_CHECK_INTERVAL  # Reset backoff
-            else:
-                # Exponential backoff on failure
-                log.error(
-                    "Reconnection failed, next attempt in %d seconds",
-                    self._reconnect_delay
-                )
-                self._last_message_time = time.time()  # Prevent immediate retry
-                self._reconnect_delay = min(
-                    self._reconnect_delay * 2,
-                    MAX_RECONNECT_DELAY
-                )
+    def _reconnect(self) -> None:
+        """Reconnect to MQTT broker with timeout protection and exponential backoff."""
+
+        def do_reconnect():
+            try:
+                self._connect_mqtt()
+            except Exception as e:
+                log.error("MQTT reconnection error: %s", e)
+
+        reconnect_thread = Thread(target=do_reconnect, daemon=True)
+        reconnect_thread.start()
+        reconnect_thread.join(timeout=30)
+
+        if reconnect_thread.is_alive():
+            log.error("MQTT reconnection timed out")
+            self._apply_backoff()
+        elif self._connected.is_set():
+            log.info("Reconnection successful")
+            self._last_message_time = time.time()
+            self._reconnect_delay = IDLE_CHECK_INTERVAL  # Reset backoff
+        else:
+            log.error("Reconnection failed")
+            self._apply_backoff()
+
+    def _apply_backoff(self) -> None:
+        """Apply exponential backoff for reconnection failures."""
+        self._last_message_time = time.time()  # Prevent immediate retry
+        self._reconnect_delay = min(self._reconnect_delay * 2, MAX_RECONNECT_DELAY)
+        log.info("Next reconnect attempt in %d seconds", self._reconnect_delay)
