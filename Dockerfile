@@ -14,7 +14,7 @@ RUN apk add --no-cache --virtual .build-deps \
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip wheel setuptools && \
-    python -m pip install --no-cache-dir --prefix=/install -r requirements.txt
+    python -m pip install --prefix=/install -r requirements.txt
 
 # Stage 2: Runtime image
 FROM python:3.12-alpine AS runtime

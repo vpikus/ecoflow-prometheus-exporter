@@ -8,6 +8,10 @@ on:
     types: [completed]
   workflow_dispatch:
 
+# Restrict default permissions; jobs can expand as needed
+permissions:
+  contents: read
+
 concurrency:
   group: docker-${{ github.ref }}
   cancel-in-progress: true

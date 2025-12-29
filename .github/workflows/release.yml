@@ -13,6 +13,10 @@ on:
         type: boolean
         default: false
 
+# Restrict default permissions; jobs can expand as needed
+permissions:
+  contents: read
+
 concurrency:
   group: release-${{ github.event.inputs.version }}
   cancel-in-progress: false

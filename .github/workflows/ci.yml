@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_call:  # Allow this workflow to be called by other workflows
 
+# Restrict default permissions; jobs can expand as needed
+permissions:
+  contents: read
+
 concurrency:
   # github.workflow resolves to caller's name when invoked via workflow_call,
   # so release workflow gets "Release-refs/..." while direct runs get "CI-refs/..."

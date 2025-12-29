@@ -39,7 +39,6 @@ credentials.json
 
 # Documentation and misc
 *.md
-!devices.json
 LICENSE
 Makefile
 
