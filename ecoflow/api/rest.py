@@ -20,6 +20,7 @@ ECOFLOW_API_HOST = os.getenv("ECOFLOW_API_HOST", "api-e.ecoflow.com")
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "30"))
 HTTP_RETRIES = int(os.getenv("HTTP_RETRIES", "3"))
 HTTP_BACKOFF_FACTOR = float(os.getenv("HTTP_BACKOFF_FACTOR", "0.5"))
+DEVICE_LIST_CACHE_TTL = int(os.getenv("DEVICE_LIST_CACHE_TTL", "60"))
 
 # API endpoints
 HOST = f"https://{ECOFLOW_API_HOST}"
@@ -106,8 +107,16 @@ class RestApiClient(EcoflowApiClient):
 
     def get_device(self, device_sn: str) -> DeviceInfo | None:
         """Get specific device info by serial number."""
-        devices = self._devices_cache or self.get_devices()
+        if self._is_cache_expired():
+            self.get_devices()
+        devices = self._devices_cache or []
         return next((d for d in devices if d.sn == device_sn), None)
+
+    def _is_cache_expired(self) -> bool:
+        """Check if device list cache has expired."""
+        if self._devices_cache is None or self._devices_cache_time is None:
+            return True
+        return (time.time() - self._devices_cache_time) > DEVICE_LIST_CACHE_TTL
 
     def get_device_quota(self, device_sn: str) -> dict[str, Any]:
         """Get device statistics/metrics."""

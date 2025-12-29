@@ -177,6 +177,7 @@ docker-compose up -d
 | `HTTP_TIMEOUT` | `30` | HTTP request timeout (seconds) |
 | `HTTP_RETRIES` | `3` | HTTP retry attempts (REST API) |
 | `HTTP_BACKOFF_FACTOR` | `0.5` | Exponential backoff multiplier |
+| `DEVICE_LIST_CACHE_TTL` | `60` | REST API: device list cache TTL for online status refresh |
 | `MQTT_TIMEOUT` | `60` | MQTT idle timeout before reconnect |
 | `MQTT_KEEPALIVE` | `60` | MQTT keepalive interval |
 | `IDLE_CHECK_INTERVAL` | `30` | Idle connection check frequency |

@@ -294,3 +294,93 @@ class TestRestApiClient:
             client.connect()
 
         assert "Invalid JSON" in str(exc_info.value)
+
+    def test_get_device_uses_cache_when_fresh(self, client, mock_session):
+        """Test that get_device uses cached data when cache is fresh."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "code": "0",
+            "data": [
+                {"sn": "DEV1", "deviceName": "Device 1", "productName": "Delta", "online": 1},
+            ],
+        }
+        mock_session.request.return_value = mock_response
+
+        client.connect()
+        # Reset call count after connect
+        mock_session.request.reset_mock()
+
+        # Multiple get_device calls should use cache (no new API calls)
+        device1 = client.get_device("DEV1")
+        device2 = client.get_device("DEV1")
+
+        assert device1 is not None
+        assert device2 is not None
+        mock_session.request.assert_not_called()
+
+    def test_get_device_refreshes_cache_when_expired(self, client, mock_session):
+        """Test that get_device refreshes cache when TTL expires."""
+        # Initial response (device online)
+        initial_response = MagicMock()
+        initial_response.status_code = 200
+        initial_response.json.return_value = {
+            "code": "0",
+            "data": [
+                {"sn": "DEV1", "deviceName": "Device 1", "productName": "Delta", "online": 1},
+            ],
+        }
+
+        # Updated response (device offline)
+        updated_response = MagicMock()
+        updated_response.status_code = 200
+        updated_response.json.return_value = {
+            "code": "0",
+            "data": [
+                {"sn": "DEV1", "deviceName": "Device 1", "productName": "Delta", "online": 0},
+            ],
+        }
+
+        mock_session.request.side_effect = [initial_response, updated_response]
+
+        client.connect()
+        device = client.get_device("DEV1")
+        assert device.online is True
+
+        # Simulate cache expiration by setting cache time in the past
+        client._devices_cache_time = 0
+
+        # Now get_device should refresh cache
+        device = client.get_device("DEV1")
+        assert device.online is False
+        assert mock_session.request.call_count == 2
+
+    def test_is_cache_expired_no_cache(self, client):
+        """Test cache is considered expired when no cache exists."""
+        assert client._is_cache_expired() is True
+
+    def test_is_cache_expired_no_timestamp(self, client):
+        """Test cache is considered expired when no timestamp exists."""
+        client._devices_cache = [DeviceInfo("DEV1", "Device", "Delta", True)]
+        client._devices_cache_time = None
+
+        assert client._is_cache_expired() is True
+
+    def test_is_cache_expired_fresh_cache(self, client):
+        """Test cache is not expired when recently updated."""
+        import time
+
+        client._devices_cache = [DeviceInfo("DEV1", "Device", "Delta", True)]
+        client._devices_cache_time = time.time()
+
+        assert client._is_cache_expired() is False
+
+    def test_is_cache_expired_old_cache(self, client):
+        """Test cache is expired when older than TTL."""
+        import time
+
+        client._devices_cache = [DeviceInfo("DEV1", "Device", "Delta", True)]
+        # Set cache time to 2 minutes ago (default TTL is 60s)
+        client._devices_cache_time = time.time() - 120
+
+        assert client._is_cache_expired() is True
