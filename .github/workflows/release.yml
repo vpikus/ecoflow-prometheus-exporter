@@ -1,0 +1,250 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.0.0, 1.2.3-beta.1)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run (skip tag creation and push)'
+        required: false
+        type: boolean
+        default: false
+
+# Restrict default permissions; jobs can expand as needed
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/ecoflow-prometheus-exporter
+
+jobs:
+  validate:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      tag: ${{ steps.validate.outputs.tag }}
+    steps:
+      - name: Validate version format
+        id: validate
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          # Use env var to prevent command injection
+          VERSION="$INPUT_VERSION"
+
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+
+          # Validate semver format (strict - no leading zeros, valid pre-release identifiers)
+          # Allows: 1.0.0, 1.2.3-beta.1, 1.0.0-rc.1
+          # Disallows: 01.0.0 (leading zeros), 1.0.0-.. (malformed pre-release)
+          SEMVER_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$'
+          if ! [[ "$VERSION" =~ $SEMVER_REGEX ]]; then
+            echo "::error::Invalid version format: $VERSION"
+            echo "::error::Expected format: X.Y.Z or X.Y.Z-prerelease (e.g., 1.0.0, 1.2.3-beta.1)"
+            echo "::error::Note: Leading zeros are not allowed. Build metadata (+build) is not supported."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Validated version: $VERSION (tag: v$VERSION)"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check tag doesn't exist
+        env:
+          TAG: ${{ steps.validate.outputs.tag }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists"
+            exit 1
+          fi
+          echo "Tag $TAG is available"
+
+  ci:
+    name: Run CI
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  release:
+    name: Create Release
+    needs: [validate, ci]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      release_url: ${{ steps.release_url.outputs.url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          # Fetch latest tags from remote to detect race conditions
+          git fetch --tags --force
+
+          # Re-check tag doesn't exist (race condition prevention)
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG was created while CI was running"
+            exit 1
+          fi
+
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "Created and pushed tag: $TAG"
+
+      - name: Create GitHub Release
+        id: create_release
+        if: ${{ !inputs.dry_run }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: Release ${{ needs.validate.outputs.tag }}
+          draft: false
+          prerelease: ${{ contains(needs.validate.outputs.version, '-') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release URL
+        id: release_url
+        if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Use GitHub API to reliably get release URL
+          URL=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" --jq '.html_url')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Release URL: $URL"
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          echo "## Dry Run Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Would create tag: $TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release notes will be auto-generated by GitHub" >> "$GITHUB_STEP_SUMMARY"
+
+  docker:
+    name: Build & Push Docker Image
+    needs: [validate, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Use tag for real releases, current SHA for dry runs
+          ref: ${{ inputs.dry_run && github.sha || needs.validate.outputs.tag }}
+
+      - name: Compute build metadata
+        id: build_meta
+        run: |
+          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: ${{ !inputs.dry_run }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.validate.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(needs.validate.outputs.version, '-') }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ !inputs.dry_run }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.validate.outputs.version }}
+            BUILD_DATE=${{ steps.build_meta.outputs.build_date }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        env:
+          DOCKER_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "## Docker Dry Run Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Would push with tags:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$DOCKER_TAGS" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  summary:
+    name: Release Summary
+    needs: [validate, release, docker]
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.dry_run }}
+    steps:
+      - name: Summary
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_URL: ${{ needs.release.outputs.release_url }}
+        run: |
+          echo "## Release $TAG completed!" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Release" >> "$GITHUB_STEP_SUMMARY"
+          echo "- GitHub Release: $RELEASE_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Docker Images" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pull the image:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
