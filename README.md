@@ -2,7 +2,7 @@
 
 Prometheus metrics exporter for EcoFlow portable power stations and solar generators.
 
-> ⚠️ **Disclaimer:** This is a personal, open-source project created for learning and experimentation. It is not intended to support the full range of EcoFlow features
+> ⚠️ **Disclaimer:** This is a personal, open-source project created for learning and experimentation. It is not intended to support the full range of EcoFlow features.
 > The application works in read-only mode and does not send, modify, or push any configuration or data to the EcoFlow API.
 > This project is not affiliated with or endorsed by EcoFlow in any way. It is provided as-is, with no guarantees or warranties.
 
@@ -16,10 +16,11 @@ Prometheus metrics exporter for EcoFlow portable power stations and solar genera
 - Automatic retry with exponential backoff
 - Connection pooling for REST API
 - Supports both JSON and Protobuf message formats
+- Multi-platform Docker images (amd64, arm64)
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12+
 - EcoFlow account with registered devices
 - Either:
   - Developer API credentials (accessKey/secretKey) from [EcoFlow IoT Platform](https://developer.ecoflow.com/)
@@ -33,7 +34,21 @@ Prometheus metrics exporter for EcoFlow portable power stations and solar genera
 pip install -r requirements.txt
 ```
 
+For development (includes testing and linting tools):
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 ### Using Docker
+
+Pre-built images are available from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/vpikus/ecoflow-prometheus-exporter:latest
+```
+
+Or build locally:
 
 ```bash
 docker build -t ecoflow-exporter .
@@ -88,7 +103,7 @@ docker run -d \
   -e ECOFLOW_ACCOUNT_USER="your-email@example.com" \
   -e ECOFLOW_ACCOUNT_PASSWORD="your-password" \
   -e ECOFLOW_API_TYPE="device" \
-  ecoflow-exporter
+  ghcr.io/vpikus/ecoflow-prometheus-exporter:latest
 ```
 
 ### Using Docker Compose
@@ -106,7 +121,7 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   ecoflow_exporter:
-    build: .
+    image: ghcr.io/vpikus/ecoflow-prometheus-exporter:latest
     ports:
       - "9090:9090"
     restart: unless-stopped
@@ -228,6 +243,22 @@ For example, if your device SN is `P521ZE1B3H6J0717` and the API returns the sam
 
 **Recommendation:** Use Device API (`ECOFLOW_API_TYPE=device`) for best compatibility.
 
+## Docker Image
+
+The Docker image is built with security and efficiency in mind:
+
+- **Multi-stage build** - Minimal runtime image size
+- **Non-root user** - Runs as `ecoflow` user (UID 1000)
+- **Health check** - Built-in health monitoring via `/metrics` endpoint
+- **Multi-platform** - Supports `linux/amd64` and `linux/arm64`
+
+Available tags:
+
+- `latest` - Latest stable release
+- `X.Y.Z` - Specific version (e.g., `1.0.0`)
+- `X.Y` - Minor version (e.g., `1.0`)
+- `sha-XXXXXX` - Specific commit
+
 ## Prometheus Configuration
 
 Add to your `prometheus.yml`:
@@ -277,6 +308,37 @@ Import metrics into Grafana to visualize:
 - Charging status
 - Solar input (if applicable)
 
+## Development
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/vpikus/ecoflow-prometheus-exporter.git
+cd ecoflow-prometheus-exporter
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install development dependencies
+pip install -r requirements-dev.txt
+```
+
+### Running Tests
+
+```bash
+pytest --cov=ecoflow --cov-report=term-missing
+```
+
+### Linting
+
+```bash
+ruff check .
+ruff format --check .
+mypy ecoflow/
+```
+
 ## Troubleshooting
 
 ### "signature is wrong" error (REST API)
@@ -296,6 +358,14 @@ Adjust timeout values:
 ```bash
 export HTTP_TIMEOUT=60
 export MQTT_TIMEOUT=120
+```
+
+### Device goes offline and doesn't recover (REST API)
+
+The REST API caches the device list. By default, it refreshes every 60 seconds. You can adjust this:
+
+```bash
+export DEVICE_LIST_CACHE_TTL=30  # Refresh every 30 seconds
 ```
 
 ## License
