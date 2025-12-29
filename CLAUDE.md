@@ -78,6 +78,7 @@ ecoflow-prometheus-exporter/
    - Polling-based: fetches data on each `get_device_quota()` call
    - Connection pooling with `requests.Session` for efficiency
    - Automatic retry with exponential backoff on transient failures
+   - Device list cache with TTL for online status refresh (default 60s)
    - Endpoints: `api.ecoflow.com/iot-open/sign/device/...`
 
 3. **MqttApiClient** (`ecoflow/api/mqtt.py`): Public MQTT implementation
@@ -155,6 +156,7 @@ ecoflow-prometheus-exporter/
 | HTTP_TIMEOUT | 30 | HTTP request timeout in seconds |
 | HTTP_RETRIES | 3 | Number of HTTP retry attempts (REST API) |
 | HTTP_BACKOFF_FACTOR | 0.5 | Exponential backoff multiplier for retries |
+| DEVICE_LIST_CACHE_TTL | 60 | REST API: seconds before device list cache expires (for online status refresh) |
 | MQTT_TIMEOUT | 60 | MQTT idle timeout before reconnect |
 | MQTT_KEEPALIVE | 60 | MQTT keepalive interval in seconds |
 | IDLE_CHECK_INTERVAL | 30 | Seconds between idle connection checks |
