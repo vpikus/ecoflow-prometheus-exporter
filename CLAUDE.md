@@ -61,7 +61,9 @@ ecoflow-prometheus-exporter/
     │   ├── device_common.proto # Device status messages
     │   └── *_pb2.py           # Generated protobuf modules
     ├── metrics/
-    │   └── prometheus.py      # EcoflowMetric wrapper
+    │   ├── __init__.py        # Exports: EcoflowMetric, get_analytics, reset_analytics
+    │   ├── prometheus.py      # EcoflowMetric wrapper (Gauge, Counter, Histogram, Info)
+    │   └── analytics.py       # AnalyticsMetrics singleton (operational metrics)
     └── worker.py              # Worker (collection loop)
 ```
 
@@ -185,3 +187,54 @@ The decoder processes `DisplayPropertyUpload` messages (cmd_func=254, cmd_id=21)
 Proto definitions are in `ecoflow/proto/`:
 - `common.proto`: Header message format for MQTT communication
 - `device_common.proto`: Device status and metric message definitions
+
+## Analytics Metrics
+
+The exporter includes operational metrics for monitoring its own health (`ecoflow/metrics/analytics.py`):
+
+### Metrics Overview
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `ecoflow_scrape_duration_seconds` | Histogram | device labels | Time to collect device data |
+| `ecoflow_scrape_requests_total` | Counter | device labels, `status` | Total scrape attempts (success/error) |
+| `ecoflow_metrics_collected` | Gauge | device labels | Number of metrics in last scrape |
+| `ecoflow_http_request_duration_seconds` | Histogram | `endpoint` | HTTP request latency |
+| `ecoflow_http_requests_total` | Counter | `endpoint`, `status` | Total HTTP requests |
+| `ecoflow_cache_operations_total` | Counter | `result` | Device list cache hit/miss |
+| `ecoflow_auth_duration_seconds` | Histogram | `client_type` | Auth duration |
+| `ecoflow_auth_requests_total` | Counter | `client_type`, `status` | Auth attempts |
+| `ecoflow_mqtt_connected` | Gauge | `client_type` | MQTT connection status (1/0) |
+| `ecoflow_mqtt_messages_total` | Counter | `client_type`, `type` | MQTT messages received |
+| `ecoflow_mqtt_reconnections_total` | Counter | `client_type` | Reconnection attempts |
+| `ecoflow_mqtt_message_errors_total` | Counter | `client_type` | Message processing errors |
+| `ecoflow_quota_requests_total` | Counter | `status` | Quota requests (sent/skipped/error) |
+
+### Label Values
+
+- `client_type`: `mqtt` for MqttApiClient, `device` for DeviceApiClient
+- `status`: `success`, `error`, `timeout`, `not_found`, `offline`
+- `result`: `hit`, `miss`
+- `type`: `text`, `protobuf` (encoding type, not content validity)
+- `endpoint`: API endpoint path (e.g., `/device/list`, `/device/quota`)
+
+### Usage
+
+```python
+from ecoflow.metrics import get_analytics
+
+analytics = get_analytics()
+
+# Using context managers for timing
+with analytics.time_scrape(device="SN123", device_name="MyDevice", ...):
+    # collect data
+    pass
+
+with analytics.time_http_request(endpoint="/device/list"):
+    # make HTTP request
+    pass
+
+# Direct metric access
+analytics.http_requests_total.labels(endpoint="/device/list", status="success").inc()
+analytics.mqtt_connected.labels(client_type="mqtt").set(1)
+```

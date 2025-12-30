@@ -1,7 +1,7 @@
 """Tests for ecoflow/metrics/prometheus.py - Prometheus metrics wrapper."""
 
 import pytest
-from prometheus_client import REGISTRY, Counter, Gauge
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
 from ecoflow.metrics.prometheus import EcoflowMetric
 
@@ -122,8 +122,8 @@ class TestMetricCreation:
         """Test creating a Counter metric."""
         metric = EcoflowMetric(
             Counter,
-            "connection_errors",
-            "Connection error count",
+            "test_counter_metric",
+            "Test counter",
             labelnames=EcoflowMetric.LABEL_NAMES,
             device="TEST123",
             device_name="Test Device",
@@ -131,8 +131,41 @@ class TestMetricCreation:
             device_general_key="test_key",
         )
 
-        assert "connection_errors" in EcoflowMetric.METRICS_POOL
+        assert "test_counter_metric" in EcoflowMetric.METRICS_POOL
         assert isinstance(metric.metric, Counter)
+
+    def test_create_histogram_metric(self):
+        """Test creating a Histogram metric."""
+        metric = EcoflowMetric(
+            Histogram,
+            "request_duration",
+            "Request duration in seconds",
+            labelnames=EcoflowMetric.LABEL_NAMES,
+            buckets=(0.1, 0.5, 1.0, 5.0),
+            device="TEST123",
+            device_name="Test Device",
+            product_name="Test Product",
+            device_general_key="test_key",
+        )
+
+        assert "request_duration" in EcoflowMetric.METRICS_POOL
+        assert isinstance(metric.metric, Histogram)
+
+    def test_create_histogram_metric_without_buckets(self):
+        """Test creating a Histogram metric without custom buckets."""
+        metric = EcoflowMetric(
+            Histogram,
+            "default_duration",
+            "Duration with default buckets",
+            labelnames=EcoflowMetric.LABEL_NAMES,
+            device="TEST123",
+            device_name="Test Device",
+            product_name="Test Product",
+            device_general_key="test_key",
+        )
+
+        assert "default_duration" in EcoflowMetric.METRICS_POOL
+        assert isinstance(metric.metric, Histogram)
 
     def test_metric_pooling_reuses_existing(self):
         """Test that same metric name reuses existing metric."""
@@ -213,6 +246,24 @@ class TestMetricOperations:
         # Should not raise
         metric.inc()
         metric.inc(5)
+
+    def test_histogram_observe(self):
+        """Test observing a value in histogram."""
+        metric = EcoflowMetric(
+            Histogram,
+            "test_histogram",
+            "Test histogram",
+            labelnames=EcoflowMetric.LABEL_NAMES,
+            buckets=(0.1, 0.5, 1.0),
+            device="TEST",
+            device_name="Test",
+            product_name="Product",
+            device_general_key="key",
+        )
+
+        # Should not raise
+        metric.observe(0.25)
+        metric.observe(0.75)
 
     def test_gauge_clear(self):
         """Test clearing gauge labels."""

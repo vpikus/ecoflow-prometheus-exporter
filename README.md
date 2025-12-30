@@ -298,6 +298,81 @@ ecoflow_inv_output_watts{device="DCA12345678",...} 450
 # And many more device-specific metrics...
 ```
 
+### Operational Metrics
+
+The exporter also provides metrics for monitoring its own health and performance:
+
+#### Scrape Metrics
+
+```text
+# Histogram: Time spent collecting device data
+ecoflow_scrape_duration_seconds_bucket{device="...",le="0.5"} 10
+ecoflow_scrape_duration_seconds_sum{device="..."} 3.2
+ecoflow_scrape_duration_seconds_count{device="..."} 10
+
+# Counter: Total scrape attempts by status
+ecoflow_scrape_requests_total{device="...",status="success"} 100
+ecoflow_scrape_requests_total{device="...",status="error"} 2
+ecoflow_scrape_requests_total{device="...",status="not_found"} 0
+ecoflow_scrape_requests_total{device="...",status="offline"} 5
+
+# Gauge: Number of metrics collected in last scrape
+ecoflow_metrics_collected{device="..."} 45
+```
+
+#### HTTP/REST API Metrics
+
+```text
+# Histogram: HTTP request latency
+ecoflow_http_request_duration_seconds_bucket{endpoint="/device/list",le="1.0"} 50
+
+# Counter: HTTP requests by endpoint and status
+ecoflow_http_requests_total{endpoint="/device/list",status="success"} 100
+ecoflow_http_requests_total{endpoint="/device/quota",status="timeout"} 1
+
+# Counter: Device list cache operations
+ecoflow_cache_operations_total{result="hit"} 90
+ecoflow_cache_operations_total{result="miss"} 10
+```
+
+#### Authentication Metrics
+
+```text
+# Histogram: Authentication duration (login + credentials retrieval)
+ecoflow_auth_duration_seconds_bucket{client_type="mqtt",le="5.0"} 10
+
+# Counter: Authentication attempts by client type and status
+ecoflow_auth_requests_total{client_type="mqtt",status="success"} 5
+ecoflow_auth_requests_total{client_type="device",status="error"} 1
+```
+
+#### MQTT Connection Metrics
+
+```text
+# Gauge: MQTT connection status (1=connected, 0=disconnected)
+ecoflow_mqtt_connected{client_type="mqtt"} 1
+ecoflow_mqtt_connected{client_type="device"} 1
+
+# Counter: MQTT messages received by encoding type (text=UTF-8, protobuf=binary)
+ecoflow_mqtt_messages_total{client_type="mqtt",type="text"} 500
+ecoflow_mqtt_messages_total{client_type="device",type="protobuf"} 200
+
+# Counter: MQTT reconnection attempts
+ecoflow_mqtt_reconnections_total{client_type="mqtt"} 2
+
+# Counter: MQTT message processing errors
+ecoflow_mqtt_message_errors_total{client_type="mqtt"} 0
+ecoflow_mqtt_message_errors_total{client_type="device"} 1
+```
+
+#### Device API Metrics
+
+```text
+# Counter: Quota request operations
+ecoflow_quota_requests_total{status="sent"} 100
+ecoflow_quota_requests_total{status="skipped"} 50  # Skipped due to recent push data
+```
+
 ## Grafana Dashboard
 
 Import metrics into Grafana to visualize:

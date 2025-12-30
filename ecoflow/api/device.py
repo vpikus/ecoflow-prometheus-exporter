@@ -23,6 +23,7 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+from ..metrics import get_analytics
 from .base import EcoflowApiClient
 from .models import DeviceInfo, EcoflowApiException
 from .mqtt import MqttAuthentication, RepeatTimer
@@ -88,7 +89,7 @@ class DeviceApiClient(EcoflowApiClient):
 
     def connect(self) -> None:
         """Authenticate and connect to MQTT broker."""
-        self.auth.authorize()
+        self.auth.authorize(client_type="device")
 
         # Set up topics using user_id
         user_id = self.auth.user_id
@@ -138,6 +139,9 @@ class DeviceApiClient(EcoflowApiClient):
             self._client = None
         self._connected.clear()
         self._subscribed.clear()
+        # Update connection gauge immediately (don't wait for callback)
+        analytics = get_analytics()
+        analytics.mqtt_connected.labels(client_type="device").set(0)
 
     def get_devices(self) -> list[DeviceInfo]:
         """Get list of devices (returns configured device only)."""
@@ -202,27 +206,32 @@ class DeviceApiClient(EcoflowApiClient):
         self._client.connect(self.auth.mqtt_url, self.auth.mqtt_port, keepalive=MQTT_KEEPALIVE)
         self._client.loop_start()
 
-    def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
+    def _on_connect(self, client: mqtt.Client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT connection callback."""
         self._last_message_time = time.time()
+        analytics = get_analytics()
 
         if str(reason_code) == "Success":
             self._connected.set()
+            analytics.mqtt_connected.labels(client_type="device").set(1)
             # Subscribe to both data topic and get_reply topic
             topics = [
                 (self._data_topic, 1),
                 (self._get_reply_topic, 1),
             ]
-            self._client.subscribe(topics)
+            client.subscribe(topics)
             log.info("Subscribed to Device API topics: %s", [t[0] for t in topics])
         else:
             self._connected.clear()
+            analytics.mqtt_connected.labels(client_type="device").set(0)
             log.error("MQTT connection failed: %s", reason_code)
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT disconnection callback."""
         self._connected.clear()
         self._subscribed.clear()
+        analytics = get_analytics()
+        analytics.mqtt_connected.labels(client_type="device").set(0)
         if reason_code != 0:
             log.error("Unexpected MQTT disconnection: %s", reason_code)
 
@@ -234,26 +243,33 @@ class DeviceApiClient(EcoflowApiClient):
     def _on_message(self, client, userdata, message) -> None:
         """Handle incoming MQTT message."""
         self._last_message_time = time.time()
+        analytics = get_analytics()
 
         try:
-            payload = message.payload.decode("utf-8")
-            topic = message.topic
+            try:
+                payload = message.payload.decode("utf-8")
+                topic = message.topic
+                # Count as "text" (encoding type), not "json" - parse errors tracked separately
+                analytics.mqtt_messages_total.labels(client_type="device", type="text").inc()
 
-            if topic == self._get_reply_topic:
-                self._handle_quota_reply(payload)
-            elif topic == self._data_topic:
-                self._handle_data_message(payload)
-            else:
-                log.debug("Message on unknown topic: %s", topic)
+                if topic == self._get_reply_topic:
+                    self._handle_quota_reply(payload)
+                elif topic == self._data_topic:
+                    self._handle_data_message(payload)
+                else:
+                    log.debug("Message on unknown topic: %s", topic)
 
-        except UnicodeDecodeError:
-            # Binary payload (protobuf)
-            self._handle_binary_message(message.payload)
-        except Exception as e:
-            log.error("Error processing MQTT message: %s", e)
+            except UnicodeDecodeError:
+                # Binary payload (protobuf)
+                analytics.mqtt_messages_total.labels(client_type="device", type="protobuf").inc()
+                self._handle_binary_message(message.payload)
+        except Exception:
+            analytics.mqtt_message_errors_total.labels(client_type="device").inc()
+            log.exception("Error processing MQTT message")
 
     def _handle_binary_message(self, payload: bytes) -> None:
         """Process incoming binary (protobuf) MQTT message."""
+        analytics = get_analytics()
         try:
             params = self._proto_decoder.decode(payload)
 
@@ -263,11 +279,13 @@ class DeviceApiClient(EcoflowApiClient):
                     self._last_update = time.time()
 
                 log.debug("Updated cache with %d protobuf parameters", len(params))
-        except Exception as e:
-            log.error("Error processing protobuf message: %s", e)
+        except Exception:
+            analytics.mqtt_message_errors_total.labels(client_type="device").inc()
+            log.exception("Error processing protobuf message")
 
     def _handle_quota_reply(self, payload: str) -> None:
         """Process quota reply message (latestQuotas response)."""
+        analytics = get_analytics()
         try:
             data = json.loads(payload)
 
@@ -286,11 +304,13 @@ class DeviceApiClient(EcoflowApiClient):
             else:
                 log.debug("Quota reply with operateType: %s", data.get("operateType"))
 
-        except json.JSONDecodeError as e:
-            log.error("Failed to parse quota reply: %s", e)
+        except Exception:
+            analytics.mqtt_message_errors_total.labels(client_type="device").inc()
+            log.exception("Failed to process quota reply")
 
     def _handle_data_message(self, payload: str) -> None:
         """Process push data message (same as public MQTT)."""
+        analytics = get_analytics()
         try:
             data = json.loads(payload)
             params = data.get("params", {})
@@ -302,8 +322,9 @@ class DeviceApiClient(EcoflowApiClient):
 
             log.debug("Received push data with %d parameters", len(params))
 
-        except json.JSONDecodeError as e:
-            log.error("Failed to parse data message: %s", e)
+        except Exception:
+            analytics.mqtt_message_errors_total.labels(client_type="device").inc()
+            log.exception("Failed to process data message")
 
     def _request_quota(self) -> None:
         """Send quota request to device.
@@ -311,6 +332,8 @@ class DeviceApiClient(EcoflowApiClient):
         Only sends request if no push data received recently, to avoid
         redundant server requests when device is actively pushing data.
         """
+        analytics = get_analytics()
+
         if not self._connected.is_set() or not self._client:
             log.debug("Not connected, skipping quota request")
             return
@@ -320,6 +343,7 @@ class DeviceApiClient(EcoflowApiClient):
             time_since_push = time.time() - self._last_push_data_time
             if time_since_push < QUOTA_REQUEST_INTERVAL:
                 log.debug("Skipping quota request, received push data %.1fs ago", time_since_push)
+                analytics.quota_requests_total.labels(status="skipped").inc()
                 return
 
         message = {
@@ -334,8 +358,10 @@ class DeviceApiClient(EcoflowApiClient):
         try:
             payload = json.dumps(message)
             self._client.publish(self._get_topic, payload, qos=1)
+            analytics.quota_requests_total.labels(status="sent").inc()
             log.debug("Sent quota request to %s", self._get_topic)
         except Exception as e:
+            analytics.quota_requests_total.labels(status="error").inc()
             log.error("Failed to send quota request: %s", e)
 
     def _check_idle(self) -> None:
@@ -346,6 +372,8 @@ class DeviceApiClient(EcoflowApiClient):
 
     def _reconnect(self) -> None:
         """Reconnect to MQTT broker with timeout protection and exponential backoff."""
+        analytics = get_analytics()
+        analytics.mqtt_reconnections_total.labels(client_type="device").inc()
 
         def do_reconnect():
             try:
