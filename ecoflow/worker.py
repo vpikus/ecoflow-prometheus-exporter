@@ -72,7 +72,9 @@ class Worker:
                 if not device:
                     log.warning("Device %s not found", self.device_sn)
                     self.online.set(0)  # Clear online status when device not found
-                    self._analytics.scrape_requests_total.labels(**self.labels, status="not_found").inc()
+                    self._analytics.scrape_requests_total.labels(
+                        **self.labels, status="not_found"
+                    ).inc()
                     self._analytics.metrics_collected.labels(**self.labels).set(0)
                     return
 
@@ -81,7 +83,9 @@ class Worker:
                 if not device.online:
                     log.info("Device %s is offline", self.device_sn)
                     self._reset_metrics()
-                    self._analytics.scrape_requests_total.labels(**self.labels, status="offline").inc()
+                    self._analytics.scrape_requests_total.labels(
+                        **self.labels, status="offline"
+                    ).inc()
                     self._analytics.metrics_collected.labels(**self.labels).set(0)
                     return
 

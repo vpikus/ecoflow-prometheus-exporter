@@ -55,11 +55,8 @@ class TestAnalyticsMetricsSingleton:
         reset_analytics()
         analytics2 = get_analytics()
 
-        # After reset, should be a different instance (but will fail if metrics
-        # are already registered - reset is mainly for testing)
-        # In practice, we can't easily check this without unregistering metrics
-        assert analytics1 is not None
-        assert analytics2 is not None
+        # After reset, should be a different instance
+        assert analytics1 is not analytics2
 
 
 class TestHistogramBuckets:
@@ -68,7 +65,17 @@ class TestHistogramBuckets:
     def test_http_duration_buckets(self):
         """Test HTTP duration buckets are properly configured."""
         assert HTTP_DURATION_BUCKETS == (
-            0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0
+            0.01,
+            0.025,
+            0.05,
+            0.1,
+            0.25,
+            0.5,
+            1.0,
+            2.5,
+            5.0,
+            10.0,
+            30.0,
         )
         # Buckets should be in ascending order
         assert list(HTTP_DURATION_BUCKETS) == sorted(HTTP_DURATION_BUCKETS)
@@ -80,9 +87,7 @@ class TestHistogramBuckets:
 
     def test_scrape_duration_buckets(self):
         """Test scrape duration buckets are properly configured."""
-        assert SCRAPE_DURATION_BUCKETS == (
-            0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0
-        )
+        assert SCRAPE_DURATION_BUCKETS == (0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0)
         assert list(SCRAPE_DURATION_BUCKETS) == sorted(SCRAPE_DURATION_BUCKETS)
 
 
@@ -234,36 +239,56 @@ class TestTimingContextManagers:
     """Tests for timing context managers."""
 
     def test_time_scrape_measures_duration(self):
-        """Test time_scrape context manager measures duration."""
+        """Test time_scrape context manager records observation to histogram."""
         analytics = get_analytics()
+        labels = {
+            "device": "TEST123",
+            "device_name": "Test Device",
+            "product_name": "Test Product",
+            "device_general_key": "test_key",
+        }
 
-        with analytics.time_scrape(
-            device="TEST123",
-            device_name="Test Device",
-            product_name="Test Product",
-            device_general_key="test_key",
-        ):
+        # Get count before
+        count_before = analytics.scrape_duration.labels(**labels)._sum._value
+
+        with analytics.time_scrape(**labels):
             time.sleep(0.01)  # Small sleep to ensure measurable duration
 
-        # No exception means it worked
+        # Verify observation was recorded (sum increased)
+        count_after = analytics.scrape_duration.labels(**labels)._sum._value
+        assert count_after > count_before
 
     def test_time_http_request_measures_duration(self):
-        """Test time_http_request context manager measures duration."""
+        """Test time_http_request context manager records observation to histogram."""
         analytics = get_analytics()
+
+        # Get count before
+        count_before = analytics.http_request_duration.labels(
+            endpoint="/device/list"
+        )._sum._value
 
         with analytics.time_http_request(endpoint="/device/list"):
             time.sleep(0.01)
 
-        # No exception means it worked
+        # Verify observation was recorded (sum increased)
+        count_after = analytics.http_request_duration.labels(
+            endpoint="/device/list"
+        )._sum._value
+        assert count_after > count_before
 
     def test_time_auth_measures_duration(self):
-        """Test time_auth context manager measures duration."""
+        """Test time_auth context manager records observation to histogram."""
         analytics = get_analytics()
+
+        # Get count before
+        count_before = analytics.auth_duration.labels(client_type="mqtt")._sum._value
 
         with analytics.time_auth(client_type="mqtt"):
             time.sleep(0.01)
 
-        # No exception means it worked
+        # Verify observation was recorded (sum increased)
+        count_after = analytics.auth_duration.labels(client_type="mqtt")._sum._value
+        assert count_after > count_before
 
     def test_time_scrape_still_records_on_exception(self):
         """Test time_scrape records duration even when exception occurs."""

@@ -35,9 +35,7 @@ class EcoflowMetric:
         if name in self.METRICS_POOL:
             self.metric = self.METRICS_POOL[name]
             if buckets is not None:
-                log.warning(
-                    "Metric '%s' already exists; buckets parameter ignored", name
-                )
+                log.warning("Metric '%s' already exists; buckets parameter ignored", name)
         else:
             modified_labelnames = list(labelnames) + list(index_labels.keys())
             if metric_type == Histogram and buckets is not None:

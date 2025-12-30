@@ -259,11 +259,15 @@ class MqttConnection:
             try:
                 payload = message.payload.decode("utf-8")
                 # Count as "text" (encoding type), not "json" - parse errors tracked separately
-                analytics.mqtt_messages_total.labels(client_type=self.client_type, type="text").inc()
+                analytics.mqtt_messages_total.labels(
+                    client_type=self.client_type, type="text"
+                ).inc()
                 self.message_callback(payload)
             except UnicodeDecodeError:
                 # Binary payload (protobuf)
-                analytics.mqtt_messages_total.labels(client_type=self.client_type, type="protobuf").inc()
+                analytics.mqtt_messages_total.labels(
+                    client_type=self.client_type, type="protobuf"
+                ).inc()
                 if self.binary_callback:
                     self.binary_callback(message.payload)
                 else:
