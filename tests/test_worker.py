@@ -6,13 +6,15 @@ import pytest
 from prometheus_client import REGISTRY
 
 from ecoflow.api.models import DeviceInfo, EcoflowApiException
+from ecoflow.metrics import reset_analytics
 from ecoflow.metrics.prometheus import EcoflowMetric
 from ecoflow.worker import Worker
 
 
 @pytest.fixture(autouse=True)
 def clear_metrics():
-    """Clear metrics pool before each test."""
+    """Clear metrics pool and analytics before each test."""
+    reset_analytics()
     EcoflowMetric.METRICS_POOL.clear()
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
@@ -21,6 +23,7 @@ def clear_metrics():
         except Exception:
             pass
     yield
+    reset_analytics()
 
 
 class TestWorkerInit:
@@ -62,8 +65,8 @@ class TestWorkerInit:
         assert worker.online is not None
         assert "online" in EcoflowMetric.METRICS_POOL
 
-    def test_init_creates_connection_errors_metric(self):
-        """Test that connection_errors metric is created on init."""
+    def test_init_creates_analytics_instance(self):
+        """Test that analytics metrics instance is created on init."""
         client = MagicMock()
         worker = Worker(
             client=client,
@@ -73,8 +76,7 @@ class TestWorkerInit:
             device_general_key="key",
         )
 
-        assert worker.connection_errors is not None
-        assert "connection_errors" in EcoflowMetric.METRICS_POOL
+        assert worker._analytics is not None
 
 
 class TestCollectData:
@@ -334,8 +336,13 @@ class TestRunLoop:
             device_general_key="key",
         )
 
-    def test_run_handles_api_exception(self, worker):
-        """Test that run handles API exceptions."""
+    def test_run_handles_exceptions_and_retries(self, worker):
+        """Test that run catches exceptions and retries.
+
+        Note: Error metrics tracking is now inside _collect_data(), which
+        re-raises the exception. This test verifies that run() catches
+        the exception and continues the retry loop.
+        """
         call_count = 0
 
         def side_effect():
@@ -346,14 +353,16 @@ class TestRunLoop:
             raise KeyboardInterrupt  # Stop the loop
 
         with patch.object(worker, "_collect_data", side_effect=side_effect):
-            with patch("time.sleep"):
-                with patch.object(worker.connection_errors, "inc") as mock_inc:
-                    try:
-                        worker.run()
-                    except KeyboardInterrupt:
-                        pass
+            with patch("time.sleep") as mock_sleep:
+                try:
+                    worker.run()
+                except KeyboardInterrupt:
+                    pass
 
-                    mock_inc.assert_called_once()
+                # Verify retry sleep was called after exception
+                mock_sleep.assert_called()
+                # Verify loop continued after exception (called twice)
+                assert call_count == 2
 
     def test_run_collects_data(self, worker):
         """Test that run calls collect_data."""

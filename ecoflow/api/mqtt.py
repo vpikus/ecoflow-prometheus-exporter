@@ -12,6 +12,7 @@ from typing import Any
 import paho.mqtt.client as mqtt
 import requests
 
+from ..metrics import get_analytics
 from .base import EcoflowApiClient
 from .models import DeviceInfo, EcoflowApiException
 
@@ -48,12 +49,24 @@ class MqttAuthentication:
         self.user_id: str | None = None
         self.user_name: str | None = None
 
-    def authorize(self) -> None:
-        """Login to EcoFlow API and retrieve MQTT credentials."""
-        token, user_id, user_name = self._login()
-        self.user_id = user_id
-        self.user_name = user_name
-        self._get_mqtt_credentials(token, user_id)
+    def authorize(self, client_type: str = "mqtt") -> None:
+        """Login to EcoFlow API and retrieve MQTT credentials.
+
+        Args:
+            client_type: Type of client for metrics (mqtt or device).
+        """
+        analytics = get_analytics()
+        try:
+            with analytics.time_auth(client_type):
+                token, user_id, user_name = self._login()
+                self._get_mqtt_credentials(token, user_id)
+                # Only set user info after all auth steps succeed
+                self.user_id = user_id
+                self.user_name = user_name
+            analytics.auth_requests_total.labels(client_type=client_type, status="success").inc()
+        except Exception:
+            analytics.auth_requests_total.labels(client_type=client_type, status="error").inc()
+            raise
 
     def _login(self) -> tuple[str, str, str]:
         """Login to EcoFlow API and return token and user info."""
@@ -144,12 +157,14 @@ class MqttConnection:
         message_callback: Callable[[str], None],
         timeout_seconds: int = MQTT_TIMEOUT,
         binary_callback: Callable[[bytes], None] | None = None,
+        client_type: str = "mqtt",
     ):
         self.device_sn = device_sn
         self.auth = auth
         self.message_callback = message_callback
         self.binary_callback = binary_callback
         self.timeout_seconds = timeout_seconds
+        self.client_type = client_type
 
         self.topic = f"/app/device/property/{device_sn}"
         self.last_message_time: float | None = None
@@ -207,22 +222,27 @@ class MqttConnection:
         """Wait for subscription confirmation. Returns True if subscribed."""
         return self._subscribed.wait(timeout)
 
-    def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
+    def _on_connect(self, client: mqtt.Client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT connection callback."""
         self.last_message_time = time.time()
+        analytics = get_analytics()
 
         if str(reason_code) == "Success":
-            self.client.subscribe(self.topic)
+            client.subscribe(self.topic)
             self._connected.set()
+            analytics.mqtt_connected.labels(client_type=self.client_type).set(1)
             log.info("Subscribed to MQTT topic %s", self.topic)
         else:
             self._connected.clear()
+            analytics.mqtt_connected.labels(client_type=self.client_type).set(0)
             log.error("MQTT connection failed: %s", reason_code)
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties) -> None:
         """Handle MQTT disconnection callback."""
         self._connected.clear()
         self._subscribed.clear()
+        analytics = get_analytics()
+        analytics.mqtt_connected.labels(client_type=self.client_type).set(0)
         if reason_code != 0:
             log.error("Unexpected MQTT disconnection: %s", reason_code)
 
@@ -234,15 +254,25 @@ class MqttConnection:
     def _on_message(self, client, userdata, message) -> None:
         """Handle incoming MQTT message."""
         self.last_message_time = time.time()
+        analytics = get_analytics()
         try:
-            payload = message.payload.decode("utf-8")
-            self.message_callback(payload)
-        except UnicodeDecodeError:
-            # Binary payload (protobuf)
-            if self.binary_callback:
-                self.binary_callback(message.payload)
-            else:
-                log.warning("Received binary MQTT message but no binary handler configured")
+            try:
+                payload = message.payload.decode("utf-8")
+                # Count as "text" (encoding type), not "json" - parse errors tracked separately
+                analytics.mqtt_messages_total.labels(client_type=self.client_type, type="text").inc()
+                self.message_callback(payload)
+            except UnicodeDecodeError:
+                # Binary payload (protobuf)
+                analytics.mqtt_messages_total.labels(client_type=self.client_type, type="protobuf").inc()
+                if self.binary_callback:
+                    self.binary_callback(message.payload)
+                else:
+                    analytics.mqtt_message_errors_total.labels(client_type=self.client_type).inc()
+                    log.warning("Received binary MQTT message but no binary handler configured")
+        except Exception:
+            # Catch-all to prevent MQTT loop from dying on callback errors
+            analytics.mqtt_message_errors_total.labels(client_type=self.client_type).inc()
+            log.exception("Error in MQTT message callback")
 
 
 class MqttApiClient(EcoflowApiClient):
@@ -318,6 +348,9 @@ class MqttApiClient(EcoflowApiClient):
         if self._mqtt:
             self._mqtt.disconnect()
             self._mqtt = None
+        # Update connection gauge immediately (don't wait for callback)
+        analytics = get_analytics()
+        analytics.mqtt_connected.labels(client_type="mqtt").set(0)
 
     def get_devices(self) -> list[DeviceInfo]:
         """Get list of devices (returns configured device only).
@@ -358,6 +391,7 @@ class MqttApiClient(EcoflowApiClient):
 
     def _handle_message(self, payload: str) -> None:
         """Process incoming MQTT message and update cache."""
+        analytics = get_analytics()
         try:
             data = json.loads(payload)
             params = data.get("params", {})
@@ -367,13 +401,16 @@ class MqttApiClient(EcoflowApiClient):
                 self._last_update = time.time()
 
             log.debug("Updated cache with %d parameters", len(params))
-        except json.JSONDecodeError as e:
-            log.error("Failed to parse MQTT payload: %s", e)
-        except Exception as e:
-            log.error("Error processing MQTT message: %s", e)
+        except json.JSONDecodeError:
+            analytics.mqtt_message_errors_total.labels(client_type="mqtt").inc()
+            log.exception("Failed to parse MQTT payload")
+        except Exception:
+            analytics.mqtt_message_errors_total.labels(client_type="mqtt").inc()
+            log.exception("Error processing MQTT message")
 
     def _handle_binary_message(self, payload: bytes) -> None:
         """Process incoming binary (protobuf) MQTT message."""
+        analytics = get_analytics()
         try:
             params = self._proto_decoder.decode(payload)
 
@@ -383,8 +420,9 @@ class MqttApiClient(EcoflowApiClient):
                     self._last_update = time.time()
 
                 log.debug("Updated cache with %d protobuf parameters", len(params))
-        except Exception as e:
-            log.error("Error processing protobuf message: %s", e)
+        except Exception:
+            analytics.mqtt_message_errors_total.labels(client_type="mqtt").inc()
+            log.exception("Error processing protobuf message")
 
     def _check_idle(self) -> None:
         """Check for idle connection and reconnect if needed."""
@@ -400,13 +438,17 @@ class MqttApiClient(EcoflowApiClient):
 
     def _reconnect(self) -> None:
         """Reconnect to MQTT broker with timeout protection and exponential backoff."""
-        if not self._mqtt:
+        mqtt_conn = self._mqtt
+        if not mqtt_conn:
             return
+
+        analytics = get_analytics()
+        analytics.mqtt_reconnections_total.labels(client_type="mqtt").inc()
 
         # Use thread with timeout for reconnection
         def do_reconnect():
             try:
-                self._mqtt.connect()
+                mqtt_conn.connect()
             except Exception as e:
                 log.error("MQTT reconnection error: %s", e)
 
@@ -417,9 +459,9 @@ class MqttApiClient(EcoflowApiClient):
         if reconnect_thread.is_alive():
             log.error("MQTT reconnection timed out")
             self._apply_backoff()
-        elif self._mqtt.is_connected():
+        elif mqtt_conn.is_connected():
             log.info("MQTT reconnection successful")
-            self._mqtt.last_message_time = time.time()
+            mqtt_conn.last_message_time = time.time()
             self._reconnect_delay = IDLE_CHECK_INTERVAL  # Reset backoff
         else:
             log.error("MQTT reconnection failed")

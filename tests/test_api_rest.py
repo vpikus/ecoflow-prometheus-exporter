@@ -230,7 +230,7 @@ class TestRestApiClient:
         """Test unwrapping successful response."""
         response = {"code": "0", "data": {"key": "value"}}
 
-        result = client._unwrap_response(response)
+        result = client._unwrap_response(response, endpoint="/test")
 
         assert result == {"key": "value"}
 
@@ -239,7 +239,7 @@ class TestRestApiClient:
         response = {"code": "1001", "message": "Error occurred"}
 
         with pytest.raises(EcoflowApiException) as exc_info:
-            client._unwrap_response(response)
+            client._unwrap_response(response, endpoint="/test")
 
         assert "code=1001" in str(exc_info.value)
         assert "Error occurred" in str(exc_info.value)
@@ -248,7 +248,7 @@ class TestRestApiClient:
         """Test unwrapping response without data field."""
         response = {"code": "0"}
 
-        result = client._unwrap_response(response)
+        result = client._unwrap_response(response, endpoint="/test")
 
         assert result == {}
 
