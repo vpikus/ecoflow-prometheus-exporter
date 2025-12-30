@@ -263,17 +263,13 @@ class TestTimingContextManagers:
         analytics = get_analytics()
 
         # Get count before
-        count_before = analytics.http_request_duration.labels(
-            endpoint="/device/list"
-        )._sum._value
+        count_before = analytics.http_request_duration.labels(endpoint="/device/list")._sum._value
 
         with analytics.time_http_request(endpoint="/device/list"):
             time.sleep(0.01)
 
         # Verify observation was recorded (sum increased)
-        count_after = analytics.http_request_duration.labels(
-            endpoint="/device/list"
-        )._sum._value
+        count_after = analytics.http_request_duration.labels(endpoint="/device/list")._sum._value
         assert count_after > count_before
 
     def test_time_auth_measures_duration(self):
